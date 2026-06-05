@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.4.1
+**Status:** Working draft · 0.5
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, and bootstrapping. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -34,6 +34,7 @@ Read, in this order:
 7. `docs/structure.md` — full. Tells you what every folder in the project is for.
 8. `docs/architecture.md` — full. The technical map: system context (L3) and containers (L4). Read before touching code so you know the runtime shape you're changing.
 9. `docs/components/` — titles of all; full reading of the file for any container whose internals the task touches (L5).
+9a. `docs/constants.md` — scan for any group whose source file is touched by this task. If the viewer has queued a proposed change (found in JOURNAL.md under "Proposed constants changes"), apply it before anything else and mark it applied.
 10. `docs/flows.md` — only if the task touches user-facing behaviour or sequencing
 11. `docs/decisions/` — titles only, then full reading of any decision relevant to the task
 12. `docs/features/` — only the features relevant to the task
@@ -59,6 +60,8 @@ This OS evolves. At the start of a session, check whether a newer version of the
 The AI updates artifacts continuously, in the background. It does NOT pause to ask permission for each change. Triggers:
 
 - **After every code change that touches structure:** update `docs/architecture.md` if a container, external dependency, or runtime topology changed; update the relevant `docs/components/NN-*.md` if a component's responsibility, public surface, or call graph changed; update `docs/screens.md` if a screen changed, the relevant feature spec if scope shifted, `docs/data-model.md` if an entity changed, `docs/permissions.md` or `docs/integrations.md` if external surface changed, `docs/telemetry.md` if events changed, `docs/contexts.md` if module ownership changed, `docs/flows.md` if a flow's steps changed. Regenerate the affected `docs/diagrams/c4-*.md` (containers, components, code) views.
+- **After any change to a config file, `.env` example, theme file, or physics/constants module:** sync `docs/constants.md` — update changed values, add new constants, mark removed ones as retired.
+- **When the viewer queues a proposed constants change:** it writes a journal-formatted block to the next JOURNAL.md entry. The AI reads it, applies the value to the Source file, and confirms in the same journal entry. This is how a non-programmer's slider move becomes a real code change.
 - **After a meaningful decision is made:** draft a decision doc with status `Proposed`. Pull the alternatives section from the active conversation.
 - **When the user implies a value or constraint:** ask one short Mode 2 clarification (see Part 2), then tag the captured value onto the affected outcome or context.
 - **Every couple of hours of active work:** append a checkpoint entry to `JOURNAL.md`.
@@ -210,6 +213,7 @@ If starting from an existing project that does NOT follow this OS:
 11. **Commit `docs/data-model.md`, `docs/permissions.md`, `docs/integrations.md`, `docs/telemetry.md`** with what's in the codebase. If telemetry doesn't exist yet, note that and propose a minimal starter event set.
 12. **Commit `docs/architecture.md`** — the system context (L3) and every container (L4) you can identify from the manifest, entry points, and runtime config. This is the most detailed structural artifact; capture runtime type, tech stack, state owned, and how containers talk. Do not stub it thinly.
 13. **Commit `docs/components/NN-*.md`** for every container over the L5 forcing-rule threshold (~500 LOC or ~5 files) — decompose each into components with real file paths, public surface, and call edges.
+13a. **Commit `docs/constants.md`** — walk every config file, `.env.example`, theme file, and physics/constants module and extract values into typed groups. Mark numeric values with min/max where the range is inferable. Do not include actual secrets — use `[set in environment]` as the value for any secret and type `secret`.
 14. **Identify implicit decisions** in the code. Draft a decision doc for each, status `Proposed`.
 15. **Render the diagrams in `docs/diagrams/`** per `VIEWS.md` — master map first, then per-layer views. Render the technical layers (containers, components, code) to full depth, not just the intent layers; the structural views are the most detailed.
 16. **Scaffold `docs/viewer/index.html`** per the viewer spec in `VIEWS.md`. The viewer is part of the bootstrap, not optional. It must default to the **current** view with technical layers shown (not hidden behind a toggle).

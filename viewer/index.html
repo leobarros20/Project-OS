@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Project-OS Viewer</title>
 <!--
-  Project-OS — reference viewer (v0)
+  Project-OS — reference viewer (v0.5)
   Single self-contained file. No build step, no server required, no external dependencies.
   Implements the spec in PROJECT_OS_VIEWS.md Part 8:
-    - Seven-layer Map with technical layers (L3-L6) shown BY DEFAULT
+    - Eight-layer Map with technical layers (L3-L7) shown BY DEFAULT
     - Simplify toggle collapses to intent layers (L0-L2)
     - Current / History toggle (retired nodes hidden from the live map)
+    - Canvas tab: IcePanel-style spatial canvas with swimlanes and bezier edges
+    - Constants tab (L7): editable live values with type-aware inputs + proposal queue
     - Structure + Screens surfaces, side panel, depends-on / blast radius, search, filters, pan/zoom
   Data: a demo project is embedded so this renders immediately (works from file://).
   Click "Open project..." to load a real project's docs/ folder.
@@ -124,6 +126,35 @@
   .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
   .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
   .hidden{display:none!important}
+
+  /* CANVAS TAB */
+  #canvas-view{position:absolute;inset:0;overflow:hidden;cursor:grab;
+    background:radial-gradient(circle at 1px 1px, #e7eaf3 1px, transparent 0) 0 0/22px 22px}
+  #canvas-view.panning{cursor:grabbing}
+  #canvas-stage{position:absolute;top:0;left:0;transform-origin:0 0}
+
+  /* CONSTANTS TAB */
+  #constants-view{position:absolute;inset:0;overflow:auto;padding:20px 26px}
+  .const-group{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow)}
+  .const-group-h{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--neutral-bg)}
+  .const-group-h .folder{font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  .const-group-h .const-meta{font-size:12px;color:var(--muted)}
+  .const-table{width:100%;border-collapse:collapse;font-size:13px}
+  .const-table th{text-align:left;padding:7px 14px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line)}
+  .const-table td{padding:8px 14px;border-bottom:1px solid var(--line)}
+  .const-table tr:last-child td{border-bottom:0}
+  .const-table tr:hover td{background:#f8f9fb}
+  .const-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:600;white-space:nowrap}
+  .const-notes{color:var(--muted);font-size:12px}
+  .const-input{border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:inherit;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel);color:var(--ink)}
+  .const-input:focus{outline:none;border-color:var(--intent)}
+  .const-changed{background:#fff8e7!important}
+  .proposed-bar{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 -4px 12px rgba(20,30,60,.06);margin-top:14px}
+  .proposed-bar .count{font-weight:700;color:var(--feature)}
+  input[type=range]{accent-color:var(--intent);vertical-align:middle}
+  input[type=color]{border:1px solid var(--line);border-radius:5px;cursor:pointer;padding:1px}
+  .val-display{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;min-width:40px;display:inline-block}
+  .secret-mask{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);letter-spacing:2px}
 </style>
 </head>
 <body>
@@ -141,8 +172,10 @@
   <div class="toolbar">
     <div class="tabs" id="tabs">
       <button data-tab="map" class="active">Map</button>
+      <button data-tab="canvas">Canvas</button>
       <button data-tab="structure">Structure</button>
       <button data-tab="screens">Screens</button>
+      <button data-tab="constants">Constants ⚡</button>
     </div>
     <span class="ctl">View
       <select id="mode">
@@ -168,8 +201,10 @@
       <div id="bands"></div>
     </div>
   </div>
+  <div class="sheet" id="canvas-view"></div>
   <div class="sheet" id="structure"></div>
   <div class="sheet" id="screens"></div>
+  <div class="sheet" id="constants-view"></div>
   <div id="panel"><div class="ph"><span class="x" id="panelx">×</span><h2 id="pn"></h2><div id="pp"></div></div><div class="body" id="pbody"></div></div>
   <div id="drop"><div class="box"><b>Drop a project folder here</b><br>or click “Open project…”. The viewer reads its <code>docs/</code> tree.<br><br><span id="dropmsg"></span></div></div>
 </main>
@@ -400,6 +435,41 @@ Move sync to a single GraphQL reconcile mutation. Supersedes 0002.
 | 1 | capture | plus button | Add a task | Capture | Current |
 | 2 | list | home | See all tasks | Storage | Current |
 | 3 | share | share menu | Public share link | Sync | Deprecated |
+`,
+"docs/constants.md":`# Constants
+
+## Group — UI Tokens
+**Scope:** Mobile App
+**Source:** mobile/src/config/theme.ts
+
+| Constant | Value | Type | Min | Max | Notes |
+|---|---|---|---|---|---|
+| ANIMATION_SPEED | 200 | ms | 50 | 2000 | Default transition duration across the UI |
+| BORDER_RADIUS | 10 | px | 0 | 50 | Card corner radius |
+| ACCENT_COLOR | #7c5cff | color | — | — | Primary brand color |
+| FONT_SIZE_BASE | 14 | px | 10 | 24 | Base body font size |
+| SHOW_BETA_FEATURES | false | boolean | — | — | Gate for beta UI |
+
+## Group — Physics
+**Scope:** Mobile App
+**Source:** mobile/src/config/physics.ts
+
+| Constant | Value | Type | Min | Max | Notes |
+|---|---|---|---|---|---|
+| GRAVITY | 9.8 | float | 0 | 50 | Downward acceleration (m/s²) |
+| JUMP_FORCE | 15 | float | 0 | 100 | Upward impulse on jump |
+| FRICTION | 0.8 | float | 0 | 1 | Surface friction coefficient |
+
+## Group — Sync
+**Scope:** Sync Service
+**Source:** .env
+
+| Constant | Value | Type | Min | Max | Notes |
+|---|---|---|---|---|---|
+| API_URL | https://api.acme.com | url | — | — | Base API endpoint |
+| MAX_BATCH_SIZE | 100 | integer | 1 | 1000 | Records per sync batch |
+| SYNC_INTERVAL_MS | 30000 | ms | 1000 | 300000 | Background sync cadence |
+| API_SECRET | [set in environment] | secret | — | — | Server signing key |
 `
 };
 
@@ -561,6 +631,35 @@ function parseProject(files){
     }
   }
   return {nodes,edges,projectName,projectSub};
+}
+
+/* ============================ CONSTANTS PARSER ============================ */
+let constantGroups=[], proposed=[];
+
+function parseConstants(files){
+  constantGroups=[];
+  for(const path in files){
+    if(!/constants\.md$/i.test(path)) continue;
+    const md=files[path]||"";
+    sections(md,2).filter(s=>/^group/i.test(s.title)).forEach(s=>{
+      const name=nameAfterDash(s.title);
+      const scope=field(s.body,"Scope");
+      const source=field(s.body,"Source");
+      const rows=s.body.split("\n").filter(l=>l.trim().startsWith("|"));
+      if(rows.length<3) return;
+      const head=rows[0].split("|").map(c=>c.trim()).filter(Boolean);
+      const ci=(n)=>head.findIndex(h=>norm(h)===norm(n));
+      const consts=rows.slice(2).map(r=>{
+        const c=r.split("|").map(x=>x.trim()).filter(Boolean);
+        if(!c.length) return null;
+        const name=c[ci("Constant")>=0?ci("Constant"):0]||"";
+        const val=c[ci("Value")>=0?ci("Value"):1]||"";
+        return {name,value:val,originalValue:val,type:(c[ci("Type")>=0?ci("Type"):2]||"string").toLowerCase(),
+          min:c[ci("Min")>=0?ci("Min"):3]||"",max:c[ci("Max")>=0?ci("Max"):4]||"",notes:c[ci("Notes")>=0?ci("Notes"):5]||""};
+      }).filter(c=>c&&c.name&&c.name!=="—"&&c.name!=="Constant");
+      constantGroups.push({name,scope,source,constants:consts,file:path});
+    });
+  }
 }
 
 /* ============================ STATE + GRAPH ============================ */
@@ -733,6 +832,198 @@ function renderScreens(){
       '</div><div class="det" style="color:var(--muted);font-size:12px">'+esc(s.fields.Purpose||"")+'</div><div style="margin-top:5px"><span class="pill '+(s.retired?"retired":"active")+'">'+esc(s.status||"")+'</span> <span class="pill">'+esc(s.fields.Context||"")+'</span></div></div></div>').join(""):'<p style="color:var(--muted)">No docs/screens.md found.</p>')+'</div>';
 }
 
+/* ============================ CANVAS TAB ============================ */
+const CBANDS=[
+  {types:["outcome"],label:"L0 · Outcomes",color:"#7c5cff"},
+  {types:["feature"],label:"Features",color:"#e08a00"},
+  {types:["context"],label:"L1 · Contexts",color:"#7c5cff"},
+  {types:["flow"],label:"L2 · Flows",color:"#7c5cff"},
+  {types:["system","external","container"],label:"L3–L4 · Technical",color:"#0d9488"},
+  {types:["component"],label:"L5 · Components",color:"#0d9488"},
+  {types:["code"],label:"L6 · Code",color:"#0d9488"},
+  {types:["decision"],label:"Decisions",color:"#2563eb"},
+];
+CBANDS.forEach(b=>b.cls=b.color==="#7c5cff"?"intent":b.color==="#0d9488"?"struct":b.color==="#e08a00"?"feature":b.color==="#2563eb"?"decision":"neutral");
+const ROW_H=130,NODE_W=155,NODE_H=62,H_GAP=12,LABEL_W=140,TOP_PAD=30,H_PAD=16;
+let canvasPositions={}, cvpX=0,cvpY=0,cvZ=1;
+
+function renderCanvas(){
+  const el=document.getElementById("canvas-view");
+  el.innerHTML="";
+  canvasPositions={};
+  for(const k in cardEl) delete cardEl[k]; // will repopulate with canvas cards too
+
+  const activeBands=CBANDS.map(b=>{
+    const ns=G.nodes.filter(n=>b.types.includes(n.type)&&visibleNode(n));
+    return {...b,ns};
+  }).filter(b=>b.ns.length);
+
+  let totalH=TOP_PAD;
+  let totalW=LABEL_W+H_PAD;
+  activeBands.forEach(b=>{
+    const rowW=LABEL_W+H_PAD+b.ns.length*(NODE_W+H_GAP)+H_PAD;
+    if(rowW>totalW) totalW=rowW;
+    b.ns.forEach((n,i)=>{
+      canvasPositions[n.id]={x:LABEL_W+H_PAD+i*(NODE_W+H_GAP),y:totalH+(ROW_H-NODE_H)/2,band:b};
+    });
+    totalH+=ROW_H;
+  });
+  totalW=Math.max(totalW,800); totalH+=TOP_PAD;
+
+  const NS="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(NS,"svg");
+  svg.setAttribute("width",totalW); svg.setAttribute("height",totalH);
+  svg.style.cssText="position:absolute;top:0;left:0;overflow:visible";
+
+  // Lane backgrounds + labels
+  let rowY=TOP_PAD;
+  activeBands.forEach(b=>{
+    const bg=document.createElementNS(NS,"rect");
+    bg.setAttribute("x",0);bg.setAttribute("y",rowY);bg.setAttribute("width",totalW);bg.setAttribute("height",ROW_H);
+    bg.setAttribute("fill",b.color+"0a"); svg.appendChild(bg);
+    const divLine=document.createElementNS(NS,"line");
+    divLine.setAttribute("x1",0);divLine.setAttribute("y1",rowY);divLine.setAttribute("x2",totalW);divLine.setAttribute("y2",rowY);
+    divLine.setAttribute("stroke","#e3e6ef");divLine.setAttribute("stroke-width","1"); svg.appendChild(divLine);
+    const lbl=document.createElementNS(NS,"text");
+    lbl.setAttribute("x",12);lbl.setAttribute("y",rowY+ROW_H/2);
+    lbl.setAttribute("dominant-baseline","middle");lbl.setAttribute("font-size","11");
+    lbl.setAttribute("font-weight","700");lbl.setAttribute("fill",b.color);lbl.setAttribute("opacity","0.85");
+    lbl.setAttribute("font-family","-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif");
+    lbl.textContent=b.label; svg.appendChild(lbl);
+    rowY+=ROW_H;
+  });
+
+  // All edges (muted)
+  G.edges.forEach(e=>{
+    const fp=canvasPositions[e.from],tp=canvasPositions[e.to];
+    if(!fp||!tp) return;
+    const x1=fp.x+NODE_W/2,y1=fp.y+NODE_H,x2=tp.x+NODE_W/2,y2=tp.y;
+    const my=(y1+y2)/2;
+    const path=document.createElementNS(NS,"path");
+    path.setAttribute("d",`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`);
+    path.setAttribute("fill","none");path.setAttribute("stroke","#cbd5e1");
+    path.setAttribute("stroke-width","1.5");path.setAttribute("opacity","0.5");
+    path.setAttribute("class","cvs-edge");
+    path.dataset.efrom=e.from; path.dataset.eto=e.to;
+    svg.appendChild(path);
+  });
+
+  // Node cards (HTML divs for richness)
+  const wrapper=document.createElement("div");
+  wrapper.id="canvas-stage"; wrapper.style.cssText="position:absolute;top:0;left:0;transform-origin:0 0";
+  wrapper.appendChild(svg);
+
+  Object.entries(canvasPositions).forEach(([id,pos])=>{
+    const n=byId[id]; if(!n) return;
+    const c=document.createElement("div");
+    c.className="card "+(pos.band.cls||"neutral")+(n.inferred?" inferred":"")+(n.retired?" retired":"");
+    c.style.cssText=`position:absolute;left:${pos.x}px;top:${pos.y}px;width:${NODE_W}px;min-height:${NODE_H}px`;
+    c.innerHTML='<div class="nm">'+esc(n.name.slice(0,22)+(n.name.length>22?"…":""))+'</div>'+(metaFor(n)?'<div class="meta">'+esc(metaFor(n).slice(0,28)+(metaFor(n).length>28?"…":""))+'</div>':'');
+    c.onclick=(ev)=>{ev.stopPropagation();select(n.id);highlightCanvasEdges(svg,id);};
+    wrapper.appendChild(c); cardEl[id]=c;
+  });
+
+  el.appendChild(wrapper);
+  applySelectionClasses();
+
+  // Pan/zoom
+  el.addEventListener("mousedown",e=>{if(!e.target.closest(".card")){el._cd=true;el.classList.add("panning");el._sx=e.clientX-cvpX;el._sy=e.clientY-cvpY;}});
+  window.addEventListener("mousemove",e=>{if(!el._cd)return;cvpX=e.clientX-el._sx;cvpY=e.clientY-el._sy;applyCanvasT();});
+  window.addEventListener("mouseup",()=>{el._cd=false;el.classList.remove("panning");});
+  el.addEventListener("wheel",e=>{e.preventDefault();const f=e.deltaY<0?1.1:0.9;const nz=Math.min(3,Math.max(.2,cvZ*f));const r=el.getBoundingClientRect();cvpX=(e.clientX-r.left)-(e.clientX-r.left-cvpX)*(nz/cvZ);cvpY=(e.clientY-r.top)-(e.clientY-r.top-cvpY)*(nz/cvZ);cvZ=nz;applyCanvasT();},{passive:false});
+}
+function applyCanvasT(){const w=document.getElementById("canvas-stage");if(w)w.style.transform=`translate(${cvpX}px,${cvpY}px) scale(${cvZ})`;}
+function highlightCanvasEdges(svg,selId){
+  svg.querySelectorAll(".cvs-edge").forEach(p=>{
+    const isRel=p.dataset.efrom===selId||p.dataset.eto===selId;
+    p.setAttribute("stroke",isRel?"var(--intent)":"#cbd5e1");
+    p.setAttribute("stroke-width",isRel?"2.5":"1.5");
+    p.setAttribute("opacity",isRel?"0.9":"0.3");
+  });
+}
+
+/* ============================ CONSTANTS TAB ============================ */
+function renderConstants(){
+  const el=document.getElementById("constants-view");
+  if(!constantGroups.length){
+    el.innerHTML='<div style="max-width:700px"><h2 style="margin:0 0 8px">Constants & live values</h2><p style="color:var(--muted)">No <code>docs/constants.md</code> found in this project.<br>Add one to catalog every env var, config value, animation speed, and physics constant — then edit them here.</p></div>';
+    return;
+  }
+  let h='<div style="max-width:900px"><h2 style="margin:0 0 6px">Constants & live values (L7)</h2>';
+  h+='<p style="color:var(--muted);font-size:13px;margin:0 0 18px">Edit values below. Changes are queued as proposals — use "Copy to AI" and paste into your next session to apply them to the source files.</p>';
+  constantGroups.forEach((g,gi)=>{
+    h+=`<div class="const-group"><div class="const-group-h"><span class="folder">${esc(g.name)}</span><span class="const-meta">Scope: ${esc(g.scope)} &middot; <code>${esc(g.source)}</code></span></div>`;
+    h+='<table class="const-table"><thead><tr><th>Constant</th><th>Value</th><th>Type</th><th>Notes</th></tr></thead><tbody>';
+    g.constants.forEach((c,ci)=>{
+      const isSecret=c.type==="secret";
+      const hasProposal=proposed.some(p=>p.gi===gi&&p.ci===ci);
+      h+=`<tr id="crow_${gi}_${ci}"${hasProposal?' class="const-changed"':''}>`;
+      h+=`<td class="const-name">${esc(c.name)}</td>`;
+      h+=`<td>${isSecret?`<span class="secret-mask" title="Secrets are not editable here">••••••••</span>`:constInput(c,gi,ci)}</td>`;
+      h+=`<td><span class="pill">${esc(c.type)}</span></td>`;
+      h+=`<td class="const-notes">${esc(c.notes)}</td>`;
+      h+='</tr>';
+    });
+    h+='</tbody></table></div>';
+  });
+  h+='</div>';
+  // Proposed bar (always rendered, shown when there are proposals)
+  h+='<div class="proposed-bar" id="proposed-bar" style="'+(proposed.length?"":"display:none")+'"><span class="count" id="prop-count">'+proposed.length+' change'+(proposed.length!==1?"s":"")+'</span><span style="color:var(--muted);font-size:13px">queued</span><button class="btn" onclick="copyProposed()">Copy to AI</button><button class="btn" onclick="clearProposed()">Clear</button><span style="flex:1"></span><span style="font-size:12px;color:var(--muted)">Paste into AI session to apply changes to source files.</span></div>';
+  el.innerHTML=h;
+  // Attach event listeners
+  constantGroups.forEach((g,gi)=>{
+    g.constants.forEach((c,ci)=>{
+      const inp=document.getElementById(`ci_${gi}_${ci}`);
+      if(!inp) return;
+      const handler=()=>{
+        const newVal=inp.type==="checkbox"?(inp.checked?"true":"false"):inp.value;
+        const disp=document.getElementById(`cv_${gi}_${ci}`);
+        if(disp) disp.textContent=newVal;
+        proposeChange(gi,ci,newVal);
+      };
+      inp.addEventListener("input",handler);
+      inp.addEventListener("change",handler);
+    });
+  });
+}
+function constInput(c,gi,ci){
+  const id=`ci_${gi}_${ci}`,did=`cv_${gi}_${ci}`,v=c.value,t=c.type;
+  const hasRange=c.min&&c.max&&c.min!=="—"&&c.max!=="—";
+  if(t==="boolean") return `<label class="switch"><input type="checkbox" id="${id}"${v==="true"?" checked":""}> <span class="val-display" id="${did}">${esc(v)}</span></label>`;
+  if(t==="color") return `<div style="display:flex;gap:8px;align-items:center"><input type="color" id="${id}" value="${esc(v)}" style="width:36px;height:28px;padding:1px;border:1px solid var(--line);border-radius:5px;cursor:pointer"><span class="val-display" id="${did}">${esc(v)}</span></div>`;
+  const isNum=["float","integer","int","number","px","ms","duration"].includes(t);
+  if(isNum&&hasRange) return `<div style="display:flex;gap:8px;align-items:center"><input type="range" id="${id}" min="${c.min}" max="${c.max}" step="${t==="float"?"0.1":"1"}" value="${v}" style="width:110px"><span class="val-display" id="${did}">${v}</span></div>`;
+  if(t==="url") return `<input type="url" id="${id}" value="${esc(v)}" class="const-input" style="width:200px">`;
+  return `<input type="text" id="${id}" value="${esc(v)}" class="const-input" style="width:130px">`;
+}
+function proposeChange(gi,ci,newVal){
+  const g=constantGroups[gi],c=g.constants[ci];
+  const idx=proposed.findIndex(p=>p.gi===gi&&p.ci===ci);
+  const row=document.getElementById(`crow_${gi}_${ci}`);
+  if(newVal===c.originalValue){
+    if(idx>=0)proposed.splice(idx,1);
+    if(row)row.classList.remove("const-changed");
+  } else {
+    const entry={gi,ci,group:g.name,name:c.name,oldVal:c.originalValue,newVal,source:g.source};
+    if(idx>=0)proposed[idx]=entry; else proposed.push(entry);
+    if(row)row.classList.add("const-changed");
+  }
+  const bar=document.getElementById("proposed-bar"),cnt=document.getElementById("prop-count");
+  if(bar)bar.style.display=proposed.length?"":"none";
+  if(cnt)cnt.textContent=proposed.length+" change"+(proposed.length!==1?"s":"");
+}
+function copyProposed(){
+  if(!proposed.length) return;
+  const today=new Date().toISOString().split("T")[0];
+  let txt=`## ${today} HH:MM · viewer proposed constants changes\n\n### Proposed changes (please apply to source files)\n`;
+  proposed.forEach(p=>{txt+=`- **${p.name}**: \`${p.oldVal}\` → \`${p.newVal}\` (group: ${p.group}, source: ${p.source})\n`;});
+  txt+="\nApply each change to its source file, then sync docs/constants.md.";
+  navigator.clipboard.writeText(txt).then(()=>alert("Copied! Paste this into your AI session to apply the changes.")).catch(()=>{
+    const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();alert("Copied!");
+  });
+}
+function clearProposed(){proposed=[];renderConstants();}
+
 /* ============================ TABS / CONTROLS ============================ */
 let tab="map";
 function showTab(t){
@@ -740,9 +1031,15 @@ function showTab(t){
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===t));
   viewport.classList.toggle("hidden",t!=="map");
   document.getElementById("edges").style.display=t==="map"?"":"none";
+  document.getElementById("canvas-view").classList.toggle("show",t==="canvas");
   document.getElementById("structure").classList.toggle("show",t==="structure");
   document.getElementById("screens").classList.toggle("show",t==="screens");
-  if(t==="structure") renderStructure(); else if(t==="screens") renderScreens(); else drawEdges();
+  document.getElementById("constants-view").classList.toggle("show",t==="constants");
+  if(t==="structure") renderStructure();
+  else if(t==="screens") renderScreens();
+  else if(t==="canvas"){cvpX=0;cvpY=0;cvZ=1;renderCanvas();}
+  else if(t==="constants") renderConstants();
+  else drawEdges();
 }
 document.getElementById("tabs").onclick=e=>{ const b=e.target.closest("button"); if(b) showTab(b.dataset.tab); };
 document.getElementById("mode").onchange=e=>{ mode=e.target.value; renderMap(); if(tab==="screens")renderScreens(); };
@@ -779,8 +1076,11 @@ window.addEventListener("resize",drawEdges);
 function load(files){
   const parsed=parseProject(files);
   buildGraph(parsed);
+  parseConstants(files);
+  proposed=[];
   document.getElementById("projname").textContent=parsed.projectName||"Project-OS Viewer";
-  document.getElementById("projsub").textContent=(parsed.projectSub||"")+" · "+G.nodes.length+" nodes · "+G.edges.length+" links";
+  const constNote=constantGroups.length?` · ${constantGroups.reduce((a,g)=>a+g.constants.length,0)} constants`:"";
+  document.getElementById("projsub").textContent=(parsed.projectSub||"")+" · "+G.nodes.length+" nodes · "+G.edges.length+" links"+constNote;
   selectedId=null; blastOn=false; document.getElementById("panel").classList.remove("show");
   buildFilters(); showTab("map"); renderMap();
 }

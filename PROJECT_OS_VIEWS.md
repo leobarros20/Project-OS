@@ -1,6 +1,6 @@
 # PROJECT_OS_VIEWS.md
 
-**Status:** Working draft · 0.4.1
+**Status:** Working draft · 0.5
 **Purpose:** How to render the project map as static diagrams and the interactive viewer. This file is the rendering contract that complements the artifact contract in `PROJECT_OS.md` and the runtime contract in `PROJECT_OS_BEHAVIOR.md`.
 
 **Audience:** AI coding agents producing diagrams or building the viewer; humans reviewing what gets rendered.
@@ -97,6 +97,23 @@ For each layer, this section defines what the rendered view must contain. Format
 - Edges showing imports, calls, observation — each labelled per Part 4
 - Telemetry events each component emits, as tags
 - A drill-down affordance from each component to its code-level (L6) view
+
+### Layer 7 — Constants (live values)
+
+**Source:** `docs/constants.md`.
+
+**The most granular layer — and the only editable one.** Constants are not just documentation; they are the actual values controlling runtime behavior. The viewer renders them as interactive inputs, not read-only text.
+
+**Required content:**
+
+- Each constant group as a labelled section, showing its scope (which container) and source file
+- Each constant with its current value, type, and any min/max range
+- Type-appropriate input: slider for numeric values with a range, color picker for hex colors, toggle for booleans, URL field for endpoints, text for strings
+- A "proposed changes" accumulator: when the user edits a value, the change is queued — not immediately applied — with the old and new value shown side by side
+- A "Copy to AI" action: formats all queued changes as a JOURNAL-ready block the user pastes into their next AI session, where the AI applies each change to its Source file
+- Secrets (type `secret`) shown as masked placeholders — never rendered in plain text, and not editable in the viewer
+
+**The drill chain from L0 to L7:** Outcome → Feature → Context → Container → Component → Code file → Constant. A non-programmer can start at "why does this exist" and drill all the way to "this slider controls the animation speed of this specific screen."
 
 ### Layer 6 — Code (C4 L4)
 
@@ -339,9 +356,9 @@ The trade-off is parser fragility — if the AI writes `### Outcome 1` one day a
 
 ### 8.1 — What the viewer does
 
-**Core capabilities (v0 must have all of these):**
+**Core capabilities (v0.5 must have all of these):**
 
-1. **Renders the seven-layer map as a navigable graph** — Layer 0 at the top, Layer 6 at the bottom, with cross-cutting threads (features, decisions, telemetry, values) shown as overlays.
+1. **Renders the eight-layer map as a navigable graph** — Layer 0 at the top, Layer 6 at the bottom, with cross-cutting threads (features, decisions, telemetry, values) shown as overlays.
 2. **Project structure view** — a dedicated panel rendering `docs/structure.md` as a navigable tree. Each folder shows status (Current / Reference / Legacy / Generated / Build artifact), purpose, owner, and touch policy. Orphans and archive candidates are flagged visually. This is the orientation surface for anyone arriving fresh.
 3. **Click any node to expand its details** — description, dependencies, source files, captured values, related ADRs, related flows.
 4. **"What depends on this?"** — given a selected node, highlight every node that imports, calls, references, or otherwise depends on it.
@@ -352,6 +369,8 @@ The trade-off is parser fragility — if the AI writes `### Outcome 1` one day a
 9. **Read-only by default.** The viewer does not write to source files. Edit-in-viewer is a future direction (see 8.7).
 10. **Current vs. history views.** The viewer defaults to the **Current** view, showing only active nodes (see `PROJECT_OS.md` Part 6). A **History** view (a header toggle that applies to every surface) reveals retired nodes — deprecated features, superseded decisions, abandoned outcomes, removed containers/screens — rendered muted, with supersession lineage (`superseded by` edges to whatever replaced each one). This is how you see "what the project used to look like" without retired cards cluttering the live map.
 11. **Deepest drill-down on the technical layers.** Clicking a container expands its components; clicking a component expands its code-level view with `file:line` deep links. The technical layers (L3–L6) are the most detailed part of the viewer and are reachable by drilling, not buried.
+12. **Constants tab — editable live values (L7).** A dedicated surface showing every constant from `docs/constants.md` as an editable, type-aware input: sliders for numbers, color pickers for hex values, toggles for booleans. Secrets are masked. Changes queue as proposals; a "Copy to AI" button formats them as a JOURNAL-ready block.
+13. **Canvas tab — IcePanel-style spatial view.** A pannable, zoomable canvas with swimlanes per layer, nodes as cards positioned spatially, and bezier-curve edges between related nodes. This is a spatial alternative to the band-based Map view — the same data, different navigation style.
 
 **View depth — technical layers are shown by default:**
 
@@ -406,7 +425,8 @@ When the viewer loads, the user sees:
 │  [Project name]                              [Current ▾] [Simplify]│
 │  [Project summary one-liner]                                    │
 ├─────────────────────────────────────────────────────────────────┤
-│  [ Map ] [ Structure ] [ Screens ]    Search ▢   Filter ▼      │
+│  [ Map ] [ Canvas ] [ Structure ] [ Screens ] [ Constants ]     │
+│                                  Search ▢   Filter ▼           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │      L0 — Outcomes (4 active)                                   │
@@ -461,11 +481,11 @@ The viewer must support:
 
 Pan and zoom on the graph itself are mandatory. The `all-layers.html` example produced for Linger is a reasonable reference.
 
-### 8.7 — Future directions (not in v0)
+### 8.7 — Future directions (not in v0.5)
 
-These are explicitly out of scope for the v0 viewer but worth keeping in mind so v0 doesn't paint into a corner:
+These are explicitly out of scope for the current viewer but worth keeping in mind:
 
-- **Edit-in-viewer.** Editing values like animation speeds or feature scope from the viewer, routed through the AI's normal cadence (the viewer queues changes; the AI processes them in the next session). v0 is read-only.
+- **Edit-in-viewer beyond L7.** L7 (constants) is editable now. Editing L5/L6 content (feature scope, component responsibilities) from the viewer, routed through the AI's cadence. Currently read-only above L7.
 - **Live code-value surfacing.** Surfacing constants extracted from code (animation durations, color tokens, magic numbers). v0 surfaces only what's already in the artifacts.
 - **Comments and annotations.** Multiple users leaving notes on nodes. v0 is single-user, no comments.
 - **Diff view.** Comparing the current state of the map to a previous git revision. v0 shows current state only.
@@ -513,7 +533,12 @@ And if a builder can:
 8. Drill from a container to its components to a specific function signature, reaching a `file:line` link to the source — without leaving the viewer.
 9. Toggle to **History** and find a deprecated feature or superseded decision that is hidden in the **Current** view, with a visible pointer to whatever replaced it.
 
-If a non-coder fails 1–6, or a builder fails 7–9, the viewer needs work.
+And if a non-programmer wanting to change behavior can:
+
+10. Open the **Constants** tab, find a numeric value (e.g. animation duration), move the slider, see the old and new values side by side, and copy the proposal in one click without touching any code or file.
+11. Open the **Canvas** tab and navigate the same project spatially — pan to a container, see its edges to other containers, click a node to open its detail panel.
+
+If a non-coder fails 1–6, a builder fails 7–9, or a non-programmer fails 10–11, the viewer needs work.
 
 ---
 

@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.4.1
+**Status:** Working draft · 0.5
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -74,6 +74,7 @@ JOURNAL.md
 docs/outcomes.md
 docs/structure.md
 docs/architecture.md
+docs/constants.md
 ```
 
 ### Filled in as the project grows
@@ -172,6 +173,7 @@ Each file below has a **purpose**, a **template**, and **structural rules**. Mai
 - `docs/flows.md` — what happens in order, end to end
 - `docs/architecture.md` — the technical map: system context + containers (the most detailed layers)
 - `docs/components/` — components inside each container
+- `docs/constants.md` — the live values catalog: every env var, config constant, token, and physics value — touchable from the viewer
 - `docs/features/` — feature specs
 - `docs/decisions/` — why the system is shaped this way
 - `docs/screens.md` — screens / scenes / pages inventory
@@ -903,13 +905,80 @@ A container is anything that runs as its own process or deployable unit: an app,
 
 ---
 
-## Part 4 — The seven-layer map
+### 3.17 — docs/constants.md
+
+**Purpose:** **Layer 7.** The live values catalog — every environment variable, configuration constant, design token, physics value, animation speed, and feature flag that the project reads at runtime. This is the bridge between the map and actual behavior: a non-programmer can read this file to understand "what controls X" and use the viewer to change it without touching code.
+
+**A day-one file.** Start with a stub listing the key knobs. Grows as the AI extracts constants from config files, `.env` examples, theme files, and physics modules.
+
+~~~markdown
+# Constants
+
+The live values that control how this project behaves. Touchable from the viewer: change a value there and the AI applies it to the source file on the next session.
+
+## Group — [Name]
+
+**Scope:** [container name or "global"]
+**Source:** [path to the file where these values live, e.g. mobile/src/config/theme.ts or .env]
+
+| Constant | Value | Type | Min | Max | Notes |
+|---|---|---|---|---|---|
+| ANIMATION_SPEED | 200 | ms | 50 | 2000 | Default transition duration across the UI |
+| BORDER_RADIUS | 10 | px | 0 | 50 | Card corner radius |
+| ACCENT_COLOR | #7c5cff | color | — | — | Primary brand color |
+
+## Group — Physics
+
+**Scope:** GameEngine container
+**Source:** src/physics/constants.ts
+
+| Constant | Value | Type | Min | Max | Notes |
+|---|---|---|---|---|---|
+| GRAVITY | 9.8 | float | 0 | 50 | Downward acceleration (m/s²) |
+| JUMP_FORCE | 15 | float | 0 | 100 | Upward impulse on jump |
+| FRICTION | 0.8 | float | 0 | 1 | Surface friction coefficient |
+
+## Group — Environment
+
+**Scope:** Sync Service
+**Source:** .env
+
+| Constant | Value | Type | Min | Max | Notes |
+|---|---|---|---|---|---|
+| API_URL | https://api.example.com | url | — | — | Base API endpoint |
+| MAX_BATCH_SIZE | 100 | integer | 1 | 1000 | Records per sync batch |
+| SYNC_INTERVAL_MS | 30000 | ms | 1000 | 300000 | Background sync cadence |
+~~~
+
+**Type vocabulary** (drives the input type the viewer renders):
+
+| Type | Viewer input | Use for |
+|---|---|---|
+| `ms` | slider + number | Durations, timeouts |
+| `px` | slider + number | Sizes, spacing |
+| `float` | slider + number | Physics, ratios, opacities |
+| `integer` | slider + number | Counts, limits |
+| `color` | color picker | Colors, hex values |
+| `boolean` | toggle | Feature flags, on/off switches |
+| `url` | text field | API endpoints, CDN URLs |
+| `string` | text field | Labels, identifiers |
+
+**Rules:**
+- One Group per logical cluster (UI tokens, physics, environment, auth, etc.).
+- **Source** must point to a real file or `environment`. The AI reads that file to extract and sync values.
+- `Min` / `Max` are optional but make the viewer render a slider — always fill them for numeric values where a sane range exists.
+- Never include secrets (actual API keys, passwords, tokens) in plaintext here. Use a placeholder like `[set in environment]` and mark the type `secret`.
+- The AI syncs this file whenever a config or env file changes. When the viewer proposes a change, the AI reads the proposal from JOURNAL.md and applies it to the Source file.
+
+---
+
+## Part 4 — The eight-layer map
 
 The artifacts above together describe a seven-layer map of the project. This part defines the layers and which artifacts feed each. **Rendering specifications for each layer live in `VIEWS.md`.**
 
 ### 4.0 — The canonical layer ordering
 
-The map has **seven layers**. The ordering is fixed.
+The map has **eight layers**. The ordering is fixed.
 
 ```
 INTENT LAYERS (the "why" and the "what happens")
@@ -924,6 +993,11 @@ Layer 3 — System context        The product + everything outside it (C4 L1)
 Layer 4 — Containers            The major runtime parts (C4 L2)
 Layer 5 — Components            Modules inside one container (C4 L3)
 Layer 6 — Code                  Classes, functions, files (C4 L4)
+
+LIVE VALUES LAYER (the "actual numbers")
+─────────────────────────────────────────────────
+Layer 7 — Constants             The actual values: env vars, config, tokens, physics,
+                                animation speeds, feature flags. Touchable from the viewer.
 ```
 
 **Three things are NOT layers — they are cross-cutting threads:**
@@ -945,6 +1019,7 @@ This has two consequences the rest of the OS enforces:
 
 - **Durable technical artifacts.** L3–L4 live in `docs/architecture.md` and L5 in `docs/components/`, maintained continuously alongside the code with at least the rigor of `docs/outcomes.md` or `docs/contexts.md`. L6 is rendered directly from source (code is the strongest evidence — see Part 5) but rendered comprehensively, not sketched.
 - **Technical layers are first-class in every view.** A rendering or viewer that shows rich intent but shallow structure is incomplete. The technical layers are shown by default and are the deepest drill-down, never hidden behind an "advanced" toggle. See `VIEWS.md` Part 1 (depth principle) and Part 8 (viewer defaults).
+- **L7 is the floor of the map — the actual values.** Layer 7 (Constants) is the most granular layer: every environment variable, configuration constant, design token, physics value, animation speed, and feature flag that controls how the project actually behaves at runtime. `docs/constants.md` is its durable home. Unlike L6 (which is read-only code), **L7 is editable from the viewer**: a non-programmer can move a slider, change a color, flip a toggle — the viewer queues the change as a proposal, and the AI applies it to the source file on the next session. This is the bridge between "understanding the project" and "actually changing how it behaves" without touching code.
 
 ### 4.1 — Source artifacts per layer
 
@@ -959,6 +1034,7 @@ For each layer, the artifacts that feed it.
 | L4 Containers | `docs/architecture.md`, manifest, top-level folder structure | `PROJECT_SUMMARY.md`, `docs/structure.md` |
 | L5 Components | `docs/components/`, per-container source code | `docs/screens.md`, `docs/features/`, `docs/contexts.md`, `docs/decisions/` |
 | L6 Code | source files, rendered code views (`docs/diagrams/c4-code-*.md`) | type signatures, public APIs, `docs/components/` |
+| L7 Constants | `docs/constants.md` (AI-maintained, sourced from config files, `.env`, theme files, physics modules) | `docs/components/`, source config files |
 
 ---
 
