@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project-OS Viewer</title>
+<!--
+  Project-OS — reference viewer (v0)
+  Single self-contained file. No build step, no server required, no external dependencies.
+  Implements the spec in PROJECT_OS_VIEWS.md Part 8:
+    - Seven-layer Map with technical layers (L3-L6) shown BY DEFAULT
+    - Simplify toggle collapses to intent layers (L0-L2)
+    - Current / History toggle (retired nodes hidden from the live map)
+    - Structure + Screens surfaces, side panel, depends-on / blast radius, search, filters, pan/zoom
+  Data: a demo project is embedded so this renders immediately (works from file://).
+  Click "Open project..." to load a real project's docs/ folder.
+-->
+<style>
+  :root{
+    --bg:#f6f7fb; --panel:#ffffff; --ink:#1d2330; --muted:#6b7280; --line:#e3e6ef;
+    --intent:#7c5cff; --intent-bg:#f1edff;
+    --struct:#0d9488; --struct-bg:#e6f7f5;
+    --feature:#e08a00; --feature-bg:#fdf3e0;
+    --decision:#2563eb; --decision-bg:#e9f0ff;
+    --neutral:#64748b; --neutral-bg:#eef1f6;
+    --hit:#16a34a; --shadow:0 1px 3px rgba(20,30,60,.08),0 6px 18px rgba(20,30,60,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+  header{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:8px;z-index:5}
+  .titlerow{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .titlerow h1{font-size:16px;margin:0;font-weight:650}
+  .titlerow .sub{color:var(--muted);font-size:12.5px}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tabs{display:flex;gap:2px;background:var(--neutral-bg);padding:3px;border-radius:9px}
+  .tabs button{border:0;background:transparent;padding:5px 12px;border-radius:7px;cursor:pointer;font-weight:550;color:var(--muted)}
+  .tabs button.active{background:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+  .ctl{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+  .ctl select,.ctl input[type=search]{border:1px solid var(--line);border-radius:7px;padding:5px 8px;font:inherit;background:var(--panel);color:var(--ink)}
+  input[type=search]{min-width:180px}
+  .btn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px 11px;cursor:pointer;font:inherit;font-weight:550;color:var(--ink)}
+  .btn:hover{border-color:#c7ccda}
+  .switch{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .pill{display:inline-block;font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.03em;background:var(--neutral-bg);color:var(--neutral)}
+  .pill.active{background:#e7f6ed;color:#16794a}
+  .pill.retired{background:#f1e3e3;color:#9b3b3b}
+  .pill.inferred{background:#fff4d6;color:#9a6b00}
+
+  main{flex:1;position:relative;overflow:hidden}
+  /* MAP */
+  #viewport{position:absolute;inset:0;overflow:hidden;cursor:grab;background:
+     radial-gradient(circle at 1px 1px, #e7eaf3 1px, transparent 0) 0 0/22px 22px}
+  #viewport.panning{cursor:grabbing}
+  #stage{position:absolute;top:0;left:0;transform-origin:0 0;padding:18px 26px 80px;min-width:100%}
+  #edges{position:absolute;inset:0;pointer-events:none;z-index:1}
+  #edges line{stroke:var(--intent);stroke-width:2;opacity:.55}
+  #edges line.sup{stroke:var(--decision);stroke-dasharray:5 4}
+  .band{position:relative;z-index:2;margin:0 0 14px}
+  .band-h{display:flex;align-items:center;gap:8px;margin:0 0 7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .band-h .rule{flex:1;height:1px;background:var(--line)}
+  .band.tech .band-h{color:var(--struct)}
+  .nodes{display:flex;flex-wrap:wrap;gap:9px}
+  .card{position:relative;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--neutral);border-radius:10px;padding:8px 11px;min-width:130px;max-width:230px;cursor:pointer;box-shadow:var(--shadow);transition:transform .08s,box-shadow .08s,opacity .12s}
+  .card:hover{transform:translateY(-1px)}
+  .card .nm{font-weight:600;font-size:13px}
+  .card .meta{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:206px}
+  .card .lineage{font-size:10.5px;color:#9b3b3b;margin-top:3px}
+  .card.intent{border-left-color:var(--intent)}
+  .card.struct{border-left-color:var(--struct)}
+  .card.feature{border-left-color:var(--feature)}
+  .card.decision{border-left-color:var(--decision)}
+  .card.neutral{border-left-color:var(--neutral)}
+  .card.inferred{border-style:dashed}
+  .card.retired{opacity:.6}
+  .card.retired .nm{text-decoration:line-through;text-decoration-color:#c98a8a}
+  .card.sel{outline:3px solid rgba(124,92,255,.35);border-color:var(--intent)}
+  .card.adj{outline:2px solid rgba(13,148,136,.4)}
+  .card.blast{outline:2px solid rgba(224,138,0,.55)}
+  .card.dim{opacity:.25}
+  .card.hit{outline:2px solid var(--hit)}
+
+  /* STRUCTURE + SCREENS */
+  .sheet{position:absolute;inset:0;overflow:auto;padding:20px 26px;display:none}
+  .sheet.show{display:block}
+  .tree{max-width:780px}
+  .row{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:8px;box-shadow:var(--shadow)}
+  .row .folder{font-weight:650;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .row .det{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .badge{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap}
+  .badge.Current{background:#e7f6ed;color:#16794a}
+  .badge.Reference{background:#e9f0ff;color:#2350c6}
+  .badge.Legacy{background:#fbeed0;color:#9a6b00}
+  .badge.Generated,.badge.Build{background:#eef1f6;color:#64748b}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;max-width:1000px}
+  .shot{border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;box-shadow:var(--shadow)}
+  .shot .ph{height:96px;background:linear-gradient(135deg,#eef1f8,#e3e8f3);display:flex;align-items:center;justify-content:center;color:#aab2c5;font-size:12px}
+  .shot .cap{padding:9px 11px}
+  .shot.retired{opacity:.6}
+  .shot.retired .nm{text-decoration:line-through}
+
+  /* SIDE PANEL */
+  #panel{position:absolute;top:0;right:0;height:100%;width:340px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(20,30,60,.08);transform:translateX(100%);transition:transform .18s;overflow:auto;z-index:6}
+  #panel.show{transform:none}
+  #panel .ph{padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+  #panel .ph .x{float:right;cursor:pointer;color:var(--muted);font-size:18px;line-height:1}
+  #panel h2{font-size:15px;margin:0 26px 6px 0}
+  #panel .body{padding:14px 16px;font-size:13px}
+  #panel .sec{margin:0 0 14px}
+  #panel .sec h3{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 6px}
+  #panel .kv{color:var(--ink)}
+  #panel ul{margin:4px 0;padding-left:0;list-style:none}
+  #panel li{padding:3px 0;border-bottom:1px dashed var(--line)}
+  #panel a.nav{color:var(--intent);cursor:pointer;text-decoration:none}
+  #panel a.nav:hover{text-decoration:underline}
+  #panel code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--neutral-bg);padding:1px 5px;border-radius:5px}
+  .minibtn{border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:5px 10px;cursor:pointer;font:inherit;font-weight:550}
+  .minibtn.on{background:var(--feature-bg);border-color:var(--feature);color:#8a5500}
+
+  /* DROP / EMPTY */
+  #drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(246,247,251,.85);z-index:7}
+  #drop.show{display:flex}
+  #drop .box{background:var(--panel);border:2px dashed var(--intent);border-radius:14px;padding:30px 40px;text-align:center;color:var(--muted)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="titlerow">
+    <h1 id="projname">Project-OS Viewer</h1>
+    <span class="sub" id="projsub"></span>
+    <span class="legend" style="margin-left:auto">
+      <span><i style="background:var(--intent)"></i>Intent L0–L2</span>
+      <span><i style="background:var(--struct)"></i>Technical L3–L6</span>
+      <span><i style="background:var(--feature)"></i>Features</span>
+      <span><i style="background:var(--decision)"></i>Decisions</span>
+    </span>
+  </div>
+  <div class="toolbar">
+    <div class="tabs" id="tabs">
+      <button data-tab="map" class="active">Map</button>
+      <button data-tab="structure">Structure</button>
+      <button data-tab="screens">Screens</button>
+    </div>
+    <span class="ctl">View
+      <select id="mode">
+        <option value="current">Current</option>
+        <option value="history">History (older versions)</option>
+      </select>
+    </span>
+    <label class="ctl switch"><input type="checkbox" id="simplify"> Simplify (intent only)</label>
+    <span class="ctl"><input type="search" id="search" placeholder="Search nodes (/)"></span>
+    <button class="btn" id="filterbtn">Layers ▾</button>
+    <span style="margin-left:auto"></span>
+    <label class="btn" for="folder">Open project…</label>
+    <input id="folder" type="file" webkitdirectory directory multiple class="hidden">
+    <button class="btn" id="reset">Reset demo</button>
+  </div>
+  <div class="toolbar hidden" id="filterpanel" style="gap:14px"></div>
+</header>
+
+<main>
+  <div id="viewport">
+    <div id="stage">
+      <svg id="edges"></svg>
+      <div id="bands"></div>
+    </div>
+  </div>
+  <div class="sheet" id="structure"></div>
+  <div class="sheet" id="screens"></div>
+  <div id="panel"><div class="ph"><span class="x" id="panelx">×</span><h2 id="pn"></h2><div id="pp"></div></div><div class="body" id="pbody"></div></div>
+  <div id="drop"><div class="box"><b>Drop a project folder here</b><br>or click “Open project…”. The viewer reads its <code>docs/</code> tree.<br><br><span id="dropmsg"></span></div></div>
+</main>
+
+<script>
+"use strict";
+/* ============================ EMBEDDED DEMO PROJECT ============================ */
+/* A compact but complete project so every feature is demoable, including retired
+   nodes (History) and technical drill-down. No backticks inside (template-literal safe). */
+const DEMO = {
+"PROJECT_SUMMARY.md":`# Acme Tasks — Project Summary\nA local-first mobile to-do app with cloud sync.`,
+"docs/outcomes.md":`# Outcomes
+
+## What success looks like
+
+### Outcome 1 — Fast capture
+**Status:** Confirmed
+- **Description:** A user can add a task in under 2 seconds from anywhere in the app.
+- **Measured by:** Median time-to-add
+- **Linked features:** Quick add
+**Values and constraints that apply here:**
+- Capture should feel instant — no spinner on the add path.
+
+### Outcome 2 — Never lose a task
+**Status:** Confirmed
+- **Description:** Tasks survive offline use, app restarts, and device loss.
+- **Measured by:** Sync success rate
+- **Linked features:** Quick add
+**Values and constraints that apply here:**
+- Local-first: the app must work fully offline.
+
+### Outcome 3 — Social sharing
+**Status:** Superseded
+- **Description:** Public task-list sharing. Dropped in favour of private collaboration.
+- **Linked features:** Social share
+`,
+"docs/contexts.md":`# Bounded contexts
+
+## Context 1 — Capture
+**Status:** Confirmed
+**One-line purpose:** Turn a user's intent into a stored task as fast as possible.
+**Talks to:**
+- **Storage** — via local write
+
+## Context 2 — Storage
+**Status:** Confirmed
+**One-line purpose:** Persist tasks locally and durably.
+**Talks to:**
+- **Sync** — via change log
+
+## Context 3 — Sync
+**Status:** Inferred
+**One-line purpose:** Reconcile local tasks with the server.
+`,
+"docs/flows.md":`# Flows
+
+## Flow 1 — Add a task
+**Status:** Confirmed
+**Triggered by:** User taps the + button
+**Serves outcomes:** Fast capture
+**Crosses contexts:** Capture, Storage
+
+## Flow 2 — Sync on reconnect
+**Status:** Inferred
+**Triggered by:** Device regains connectivity
+**Serves outcomes:** Never lose a task
+**Crosses contexts:** Storage, Sync
+`,
+"docs/architecture.md":`# Architecture
+
+## System context (Layer 3)
+**The product:** Acme Tasks — a local-first mobile to-do app with cloud sync.
+**External systems and dependencies:**
+- **Auth0** — sign-in
+- **Postgres** — server-side task store
+- **Push (APNs/FCM)** — reminders
+
+## Containers (Layer 4)
+
+### Container 1 — Mobile App
+**Status:** Current
+**Runtime type:** React Native client bundle
+**One-line purpose:** Capture, store, and display tasks on the device.
+**Tech stack:** React Native, TypeScript, SQLite
+**Hosts contexts:** Capture, Storage
+**Entry point:** mobile/src/index.tsx
+**Talks to:**
+- **Sync Service** — via HTTPS
+
+### Container 2 — Sync Service
+**Status:** Current
+**Runtime type:** Node server process
+**One-line purpose:** Merge device changes and fan out to other devices.
+**Tech stack:** Node, Fastify, Postgres
+**Hosts contexts:** Sync
+**Entry point:** services/sync/main.ts
+
+### Container 3 — Legacy Web App
+**Status:** Deprecated
+**Runtime type:** server-rendered web app
+**One-line purpose:** The original web client, replaced by the mobile app.
+**Tech stack:** Rails
+`,
+"docs/components/01-mobile-app.md":`# 01 — Mobile App components
+**Container:** Mobile App
+**Status:** Current
+
+## Component 1 — CaptureView
+**Responsibility:** Render the add-task input and commit a new task.
+**Belongs to context:** Capture
+**Key files:**
+- mobile/src/capture/CaptureView.tsx:1 — the input UI
+- mobile/src/capture/useAddTask.ts:14 — commit handler
+**Public surface:** CaptureView(), useAddTask()
+**Imports / calls:**
+- **TaskStore** — to persist the task
+
+## Component 2 — TaskStore
+**Responsibility:** Local SQLite persistence and change log.
+**Belongs to context:** Storage
+**Key files:**
+- mobile/src/store/TaskStore.ts:1 — CRUD + change log
+**Public surface:** add(), update(), all(), pendingChanges()
+**Imports / calls:**
+- **SyncClient** — hands pending changes to sync
+`,
+"docs/components/02-sync-service.md":`# 02 — Sync Service components
+**Container:** Sync Service
+**Status:** Current
+
+## Component 1 — SyncController
+**Responsibility:** HTTP endpoints for push/pull.
+**Belongs to context:** Sync
+**Key files:**
+- services/sync/SyncController.ts:1 — routes
+**Public surface:** POST /push, GET /pull
+
+## Component 2 — ConflictResolver
+**Responsibility:** Last-write-wins merge of change sets.
+**Belongs to context:** Sync
+**Key files:**
+- services/sync/ConflictResolver.ts:1 — merge logic
+**Public surface:** merge(local, remote)
+`,
+"docs/features/01-quick-add.md":`# 01 — Quick add
+**Status:** Shipped
+**Serves outcomes:** Fast capture, Never lose a task
+**Lives in contexts:** Capture, Storage
+**Drives flows:** Add a task
+**Linked screens:** capture
+
+## Problem
+Adding a task takes too many taps.
+## Solution
+A single always-available input that writes locally and syncs later.
+`,
+"docs/features/02-social-share.md":`# 02 — Social share
+**Status:** Deprecated
+**Serves outcomes:** Social sharing
+**Lives in contexts:** Sync
+**Linked screens:** share
+
+## Problem
+Users wanted to share lists publicly.
+## Solution
+Public share links. Removed — replaced by private collaboration (planned).
+`,
+"docs/decisions/0001-local-first.md":`# 0001 — Local-first storage
+**Status:** Accepted
+**Affects:** Mobile App, Storage
+**Serves outcomes:** Never lose a task
+
+## Decision
+Store tasks locally first; sync is a background reconciliation.
+`,
+"docs/decisions/0002-rest-api.md":`# 0002 — REST sync API
+**Status:** Superseded by 0003
+**Affects:** Sync Service
+
+## Decision
+Use a REST push/pull API.
+`,
+"docs/decisions/0003-graphql.md":`# 0003 — GraphQL sync API
+**Status:** Accepted
+**Affects:** Sync Service, Mobile App
+
+## Decision
+Move sync to a single GraphQL reconcile mutation. Supersedes 0002.
+`,
+"docs/structure.md":`# Project structure
+
+## Top-level directories
+
+### mobile/
+- **Status:** Current
+- **Purpose:** React Native client.
+- **Owner:** Human-authored
+- **Touch policy:** Free to edit
+
+### services/
+- **Status:** Current
+- **Purpose:** Sync service and workers.
+- **Owner:** Human-authored
+- **Touch policy:** Free to edit
+
+### web-legacy/
+- **Status:** Legacy
+- **Purpose:** Old Rails web app, superseded by mobile.
+- **Owner:** Human-authored
+- **Touch policy:** Archive candidate
+
+### docs/
+- **Status:** Current
+- **Purpose:** Project-OS artifacts.
+- **Owner:** AI-maintained
+- **Touch policy:** AI-maintained
+
+### build/
+- **Status:** Build artifact
+- **Purpose:** Compiled output.
+- **Owner:** Build output
+- **Touch policy:** Regenerate
+`,
+"docs/screens.md":`# Screen inventory
+
+| # | Name | Route / trigger | Purpose | Context | Status |
+|---|------|-----------------|---------|---------|--------|
+| 1 | capture | plus button | Add a task | Capture | Current |
+| 2 | list | home | See all tasks | Storage | Current |
+| 3 | share | share menu | Public share link | Sync | Deprecated |
+`
+};
+
+/* ============================ PARSING ============================ */
+const norm = s => (s||"").trim().toLowerCase();
+const RETIRED = /superseded|deprecat|abandon|removed/i;
+const isRetired = s => RETIRED.test(s||"");
+const INFERRED = /inferred/i;
+
+function field(body, name){
+  const m = body.match(new RegExp("\\*\\*"+name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+":\\*\\*\\s*(.+)"));
+  return m ? m[1].trim() : "";
+}
+function nameAfterDash(title){
+  const parts = title.split(/\s+[—–-]\s+/);
+  return (parts.length>1 ? parts.slice(1).join(" — ") : title).replace(/[`*]/g,"").trim();
+}
+function sections(md, level){
+  const re = new RegExp("^#{"+level+"}\\s+(.+)$","gm");
+  const out=[]; let m, last=null;
+  while((m=re.exec(md))){
+    if(last) out.push({title:last.t, body:md.slice(last.i, m.index)});
+    last={t:m[1].trim(), i:re.lastIndex};
+  }
+  if(last) out.push({title:last.t, body:md.slice(last.i)});
+  return out;
+}
+function refs(v){
+  return (v||"").split(/[,;\n]/).map(s=>s.replace(/^\s*[-*]\s*/,"").replace(/[`*]/g,"").trim())
+    .filter(s=>s && s!=="—" && s!=="-" && !/^see\b/i.test(s));
+}
+
+function parseProject(files){
+  const nodes=[], edges=[]; const idx={}; // idx[type+"|"+norm] and idx["decision#NNNN"]
+  let projectName="Project", projectSub="";
+  const add=(n)=>{ nodes.push(n); idx[n.type+"|"+norm(n.name)]=n; if(n.num) idx["decision#"+n.num]=n; return n; };
+  const get=(type,name)=> idx[type+"|"+norm(name)];
+  const anyByName=(name)=>{ for(const t of ["container","context","feature","outcome","flow","component"]){ if(idx[t+"|"+norm(name)]) return idx[t+"|"+norm(name)]; } return null; };
+  const link=(from,to,label)=>{ if(from&&to&&from!==to) edges.push({from:from.id,to:to.id,label}); };
+
+  for(const path in files){
+    const md=files[path]||""; const base=path.split("/").pop().toLowerCase();
+    try{
+      if(/project_summary\.md$/i.test(path)){ const h=md.match(/^#\s+(.+)/m); if(h) projectName=h[1].replace(/—.*/,"").trim(); const ln=md.split("\n").slice(1).map(l=>l.trim()).filter(Boolean).find(l=>!l.startsWith("#")&&!l.startsWith("|")); if(ln) projectSub=ln; }
+      else if(base==="outcomes.md"){
+        sections(md,3).filter(s=>/^outcome\s+\d/i.test(s.title)).forEach(s=>{
+          const st=field(s.body,"Status");
+          add({type:"outcome",layer:0,name:nameAfterDash(s.title),status:st,retired:isRetired(st),inferred:INFERRED.test(st),
+               desc:field(s.body,"Description"),file:path,fields:{"Measured by":field(s.body,"Measured by")},
+               values:(s.body.match(/\*\*Values and constraints[^\n]*\n([\s\S]*)/i)||[])[1]});
+        });
+      }
+      else if(base==="contexts.md"){
+        sections(md,2).filter(s=>/^context\s+\d/i.test(s.title)).forEach(s=>{
+          const st=field(s.body,"Status");
+          const n=add({type:"context",layer:1,name:nameAfterDash(s.title),status:st,retired:isRetired(st),inferred:INFERRED.test(st),
+               desc:field(s.body,"One-line purpose"),file:path,fields:{}});
+          n._talks=refs((s.body.match(/\*\*Talks to:\*\*([\s\S]*?)(?:\n##|\n---|$)/)||[])[1]?.replace(/\*\*/g,"").replace(/—.*$/gm,"")||"");
+        });
+      }
+      else if(base==="flows.md"){
+        sections(md,2).filter(s=>/^flow\s+\d/i.test(s.title)).forEach(s=>{
+          const st=field(s.body,"Status");
+          const n=add({type:"flow",layer:2,name:nameAfterDash(s.title),status:st,retired:isRetired(st),inferred:INFERRED.test(st),
+               desc:field(s.body,"Triggered by"),file:path,fields:{"Triggered by":field(s.body,"Triggered by")}});
+          n._serves=refs(field(s.body,"Serves outcomes")); n._crosses=refs(field(s.body,"Crosses contexts"));
+        });
+      }
+      else if(base==="architecture.md"){
+        const sysBody=(md.match(/##\s*System context[^\n]*\n([\s\S]*?)(?:\n##\s|\n---|$)/i)||[])[1]||"";
+        const prod=(sysBody.match(/\*\*The product:\*\*\s*(.+)/)||[])[1];
+        if(prod) add({type:"system",layer:3,name:prod.split("—")[0].trim(),status:"Current",retired:false,desc:prod,file:path,fields:{}});
+        ((((sysBody.match(/\*\*External systems[^\n]*\*\*([\s\S]*?)$/i)||[])[1])||"")
+          .split("\n").map(l=>l.replace(/^\s*[-*]\s*/,"").replace(/\*\*/g,"").split(/[—–]/)[0].trim()).filter(Boolean))
+          .forEach(x=> add({type:"external",layer:3,name:x,status:"",retired:false,desc:"External system",file:path,fields:{}}));
+        sections(md,3).filter(s=>/^container\s+\d/i.test(s.title)).forEach(s=>{
+          const st=field(s.body,"Status");
+          const n=add({type:"container",layer:4,name:nameAfterDash(s.title),status:st,retired:isRetired(st),inferred:INFERRED.test(st),
+               desc:field(s.body,"One-line purpose"),file:path,
+               fields:{"Runtime type":field(s.body,"Runtime type"),"Tech stack":field(s.body,"Tech stack"),"Entry point":field(s.body,"Entry point")}});
+          n._hosts=refs(field(s.body,"Hosts contexts"));
+          n._talks=refs((s.body.match(/\*\*Talks to:\*\*([\s\S]*?)$/)||[])[1]?.replace(/\*\*/g,"").replace(/—.*$/gm,"")||"");
+        });
+      }
+      else if(path.includes("/components/")){
+        const container=field(md,"Container");
+        sections(md,2).filter(s=>/^component\s+\d/i.test(s.title)).forEach(s=>{
+          const n=add({type:"component",layer:5,name:nameAfterDash(s.title),status:field(md,"Status"),retired:isRetired(field(md,"Status")),
+               desc:field(s.body,"Responsibility"),file:path,
+               fields:{"Public surface":field(s.body,"Public surface"),"Container":container}});
+          n._container=container; n._ctx=field(s.body,"Belongs to context");
+          n._files=(s.body.match(/\*\*Key files:\*\*([\s\S]*?)(?:\n\*\*|\n##|$)/)||[])[1]
+            ?.split("\n").map(l=>l.replace(/^\s*-\s*/,"").trim()).filter(l=>l&&!/^\*\*/.test(l))||[];
+        });
+      }
+      else if(path.includes("/features/")){
+        const h=(md.match(/^#\s+(.+)/m)||[])[1]||base; const st=field(md,"Status");
+        const n=add({type:"feature",layer:-1,name:nameAfterDash(h),status:st,retired:isRetired(st),inferred:INFERRED.test(st),
+             desc:(md.match(/##\s*Problem\s*\n([\s\S]*?)(?:\n##|$)/i)||[])[1]?.trim(),file:path,
+             fields:{"Linked screens":field(md,"Linked screens")}});
+        n._serves=refs(field(md,"Serves outcomes")); n._ctx=refs(field(md,"Lives in contexts")); n._drives=refs(field(md,"Drives flows"));
+      }
+      else if(path.includes("/decisions/")){
+        const h=(md.match(/^#\s+(.+)/m)||[])[1]||base; const st=field(md,"Status");
+        const num=(h.match(/(\d{3,4})/)||[])[1];
+        const n=add({type:"decision",layer:-1,name:nameAfterDash(h),status:st,retired:isRetired(st),num,
+             desc:(md.match(/##\s*Decision\s*\n([\s\S]*?)(?:\n##|$)/i)||[])[1]?.trim(),file:path,fields:{}});
+        n._affects=refs(field(md,"Affects")); n._serves=refs(field(md,"Serves outcomes"));
+        n._sup=(st.match(/superseded by\s*(\d{3,4})/i)||[])[1] || (md.match(/Supersedes:\s*(\d{3,4})/i)? null : null);
+        n._supByText = st.match(/superseded by\s*(\d{3,4})/i)?("Superseded by "+st.match(/superseded by\s*(\d{3,4})/i)[1]):"";
+      }
+      else if(base==="structure.md"){
+        sections(md,3).forEach(s=>{
+          add({type:"folder",layer:99,name:s.title.replace(/[`]/g,"").trim(),status:field(s.body,"Status"),
+               file:path,fields:{Purpose:field(s.body,"Purpose"),Owner:field(s.body,"Owner"),"Touch policy":field(s.body,"Touch policy")}});
+        });
+      }
+      else if(base==="screens.md"){
+        const rows=md.split("\n").filter(l=>l.trim().startsWith("|"));
+        if(rows.length>1){
+          const head=rows[0].split("|").map(c=>c.trim());
+          const ci=(name)=>head.findIndex(h=>norm(h)===norm(name));
+          rows.slice(1).filter(r=>!/^\s*\|[\s|:-]+\|?\s*$/.test(r)&&!/---/.test(r)).forEach(r=>{
+            const c=r.split("|").map(x=>x.trim());
+            const st=ci("Status")>=0?c[ci("Status")]:"";
+            add({type:"screen",layer:98,name:c[ci("Name")>0?ci("Name"):2]||"screen",status:st,retired:isRetired(st),
+                 file:path,fields:{Route:c[ci("Route / trigger")>=0?ci("Route / trigger"):3]||"",Purpose:c[ci("Purpose")>=0?ci("Purpose"):4]||"",Context:c[ci("Context")>=0?ci("Context"):5]||""}});
+          });
+        }
+      }
+    }catch(e){ console.warn("parse error in",path,e); }
+  }
+
+  // assign ids
+  nodes.forEach((n,i)=> n.id = n.type+":"+(n.num||n.name||i));
+
+  // build edges
+  for(const n of nodes){
+    if(n.type==="feature"){
+      (n._serves||[]).forEach(x=>link(n,get("outcome",x),"serves"));
+      (n._ctx||[]).forEach(x=>link(n,get("context",x),"lives in"));
+      (n._drives||[]).forEach(x=>link(n,get("flow",x),"drives"));
+    }
+    if(n.type==="flow"){ (n._crosses||[]).forEach(x=>link(n,get("context",x),"crosses")); (n._serves||[]).forEach(x=>link(n,get("outcome",x),"serves")); }
+    if(n.type==="container"){ (n._hosts||[]).forEach(x=>link(n,get("context",x),"hosts")); (n._talks||[]).forEach(x=>link(n,get("container",x),"calls")); }
+    if(n.type==="component"){
+      if(n._container) link(n,get("container",n._container),"in");
+      if(n._ctx) link(n,get("context",n._ctx),"belongs to");
+      (n._files||[]).forEach(f=>{
+        const codeName=f.split("—")[0].trim();
+        const code=add({type:"code",layer:6,name:codeName,status:"",retired:false,file:n.file,fields:{}});
+        code.id="code:"+codeName; link(n,code,"emits");
+      });
+    }
+    if(n.type==="decision"){
+      if(n._sup||n._supByText){ const t=(n._supByText.match(/(\d{3,4})/)||[])[1]; const tgt=t&&idx["decision#"+t]; if(tgt) link(n,tgt,"superseded by"); }
+      (n._affects||[]).forEach(x=>link(n,anyByName(x),"affects"));
+      (n._serves||[]).forEach(x=>link(n,get("outcome",x),"serves"));
+    }
+  }
+  return {nodes,edges,projectName,projectSub};
+}
+
+/* ============================ STATE + GRAPH ============================ */
+let G={nodes:[],edges:[]}, adj={}, radj={}, byId={};
+let selectedId=null, mode="current", simplify=false, blastOn=false, query="";
+const hiddenLayers=new Set();
+
+function buildGraph(parsed){
+  G=parsed; byId={}; adj={}; radj={};
+  G.nodes.forEach(n=>{ byId[n.id]=n; adj[n.id]=[]; radj[n.id]=[]; });
+  G.edges.forEach(e=>{ if(byId[e.from]&&byId[e.to]){ adj[e.from].push(e); radj[e.to].push(e); } });
+}
+const neighborIds=id=>{
+  const s=new Set();
+  (adj[id]||[]).forEach(e=>s.add(e.to)); (radj[id]||[]).forEach(e=>s.add(e.from));
+  return [...s];
+};
+function blastRadius(id){ // who is affected if id changes => transitive dependents (follow radj)
+  const seen=new Set(), q=[id];
+  while(q.length){ const x=q.pop(); (radj[x]||[]).forEach(e=>{ if(!seen.has(e.from)){ seen.add(e.from); q.push(e.from); } }); }
+  return seen;
+}
+
+/* ============================ MAP RENDER ============================ */
+const BANDS=[
+  {key:"outcome",label:"L0 · Outcomes",cls:"intent",intent:true},
+  {key:"feature",label:"Features",cls:"feature",intent:true},
+  {key:"context",label:"L1 · Contexts",cls:"intent",intent:true},
+  {key:"flow",label:"L2 · Flows",cls:"intent",intent:true},
+  {key:"system",label:"L3 · System context",cls:"struct",tech:true,types:["system","external"]},
+  {key:"container",label:"L4 · Containers",cls:"struct",tech:true},
+  {key:"component",label:"L5 · Components",cls:"struct",tech:true},
+  {key:"code",label:"L6 · Code",cls:"struct",tech:true},
+  {key:"decision",label:"Decisions",cls:"decision"},
+];
+const cardEl={};
+function visibleNode(n){
+  if(mode==="current" && n.retired) return false;
+  return true;
+}
+function renderMap(){
+  const bands=document.getElementById("bands"); bands.innerHTML=""; for(const k in cardEl) delete cardEl[k];
+  BANDS.forEach(b=>{
+    if(hiddenLayers.has(b.key)) return;
+    if(simplify && !b.intent) return;
+    const types=b.types||[b.key];
+    const ns=G.nodes.filter(n=>types.includes(n.type) && visibleNode(n));
+    if(!ns.length) return;
+    const band=document.createElement("div"); band.className="band"+(b.tech?" tech":"");
+    band.innerHTML='<div class="band-h"><span>'+b.label+' ('+ns.length+')</span><span class="rule"></span></div>';
+    const wrap=document.createElement("div"); wrap.className="nodes";
+    ns.forEach(n=>{
+      const c=document.createElement("div");
+      c.className="card "+(b.cls)+(n.inferred?" inferred":"")+(n.retired?" retired":"");
+      let meta=metaFor(n);
+      c.innerHTML='<div class="nm">'+esc(n.name)+'</div>'+(meta?'<div class="meta">'+esc(meta)+'</div>':'')
+        +(n.retired&&n._supByText?'<div class="lineage">→ '+esc(n._supByText)+'</div>':(n.retired?'<div class="lineage">retired ('+esc(n.status||"")+')</div>':''));
+      c.onclick=(ev)=>{ ev.stopPropagation(); select(n.id); };
+      wrap.appendChild(c); cardEl[n.id]=c;
+    });
+    band.appendChild(wrap); bands.appendChild(band);
+  });
+  applySelectionClasses(); applyQuery(); drawEdges();
+}
+function metaFor(n){
+  if(n.type==="container") return n.fields["Runtime type"]||"";
+  if(n.type==="code") return n.name.includes(":")?"":(n.file||"");
+  if(n.type==="component") return n.fields["Public surface"]||n.desc||"";
+  if(n.type==="external") return "external system";
+  if(n.type==="decision") return n.num?("ADR "+n.num):"";
+  return n.desc? n.desc.slice(0,70) : "";
+}
+
+/* ============================ SELECTION + PANEL ============================ */
+function select(id){ selectedId=id; blastOn=false; renderMap(); openPanel(byId[id]); }
+function applySelectionClasses(){
+  const nb=selectedId?new Set(neighborIds(selectedId)):new Set();
+  const blast=blastOn&&selectedId?blastRadius(selectedId):new Set();
+  for(const id in cardEl){
+    const c=cardEl[id]; c.classList.remove("sel","adj","blast");
+    if(id===selectedId) c.classList.add("sel");
+    else if(blast.has(id)) c.classList.add("blast");
+    else if(nb.has(id)) c.classList.add("adj");
+  }
+}
+function openPanel(n){
+  if(!n) return;
+  document.getElementById("pn").textContent=n.name;
+  const pill='<span class="pill '+(n.retired?"retired":(n.inferred?"inferred":"active"))+'">'+esc(n.status||n.type)+'</span>';
+  document.getElementById("pp").innerHTML=pill+' <span class="pill">'+layerName(n)+'</span>';
+  const out=(adj[n.id]||[]).map(e=>({n:byId[e.to],l:e.label}));
+  const inc=(radj[n.id]||[]).map(e=>({n:byId[e.from],l:e.label}));
+  let h="";
+  if(n.desc) h+=sec("Description",esc(n.desc));
+  if(n.values) h+=sec("Values & constraints", "<ul>"+n.values.split("\n").map(l=>l.replace(/^\s*-\s*/,"").trim()).filter(Boolean).map(v=>"<li>"+esc(v)+"</li>").join("")+"</ul>");
+  const ff=Object.entries(n.fields||{}).filter(([k,v])=>v);
+  if(ff.length) h+=sec("Details", ff.map(([k,v])=>"<div class='kv'><b>"+esc(k)+":</b> "+esc(v)+"</div>").join(""));
+  if(n._files&&n._files.length) h+=sec("Source (L6)","<ul>"+n._files.map(f=>"<li><code>"+esc(f.split("—")[0].trim())+"</code></li>").join("")+"</ul>");
+  if(n.retired&&n._supByText) h+=sec("Lineage","<div class='kv'>"+esc(n._supByText)+"</div>");
+  if(out.length) h+=sec("Depends on", relList(out));
+  if(inc.length) h+=sec("Depended on by", relList(inc));
+  h+=sec("","<button class='minibtn"+(blastOn?" on":"")+"' id='blastbtn'>"+(blastOn?"Hide":"Show")+" blast radius</button>");
+  h+=sec("Source file","<code>"+esc(n.file||"—")+"</code>");
+  document.getElementById("pbody").innerHTML=h;
+  const bb=document.getElementById("blastbtn"); if(bb) bb.onclick=()=>{ blastOn=!blastOn; applySelectionClasses(); openPanel(n); drawEdges(); };
+  document.getElementById("panel").classList.add("show");
+}
+const sec=(t,b)=>'<div class="sec">'+(t?'<h3>'+t+'</h3>':'')+b+'</div>';
+const relList=arr=>"<ul>"+arr.filter(x=>x.n).map(x=>"<li><a class='nav' data-id='"+x.n.id+"'>"+esc(x.n.name)+"</a> <span style='color:var(--muted)'>· "+esc(x.l)+"</span></li>").join("")+"</ul>";
+function layerName(n){ const L={0:"L0 Outcome",1:"L1 Context",2:"L2 Flow",3:"L3 System",4:"L4 Container",5:"L5 Component",6:"L6 Code"}; return L[n.layer]|| (n.type.charAt(0).toUpperCase()+n.type.slice(1)); }
+document.getElementById("pbody").addEventListener("click",e=>{ const a=e.target.closest("a.nav"); if(a){ ensureVisible(a.dataset.id); select(a.dataset.id); } });
+document.getElementById("panelx").onclick=()=>{ document.getElementById("panel").classList.remove("show"); selectedId=null; renderMap(); };
+function ensureVisible(id){ const n=byId[id]; if(n&&n.retired&&mode==="current"){ mode="history"; document.getElementById("mode").value="history"; } if(n&&simplify&&!BANDS.find(b=>(b.types||[b.key]).includes(n.type))?.intent){ simplify=false; document.getElementById("simplify").checked=false; } }
+
+/* ============================ EDGES ============================ */
+const edgesSvg=document.getElementById("edges");
+function drawEdges(){
+  edgesSvg.innerHTML="";
+  if(!selectedId||!cardEl[selectedId]) return;
+  const vp=document.getElementById("viewport").getBoundingClientRect();
+  edgesSvg.setAttribute("viewBox","0 0 "+vp.width+" "+vp.height);
+  edgesSvg.setAttribute("width",vp.width); edgesSvg.setAttribute("height",vp.height);
+  edgesSvg.style.left="0"; edgesSvg.style.top="0"; edgesSvg.style.width=vp.width+"px"; edgesSvg.style.height=vp.height+"px";
+  const from=cardEl[selectedId]; const fc=center(from,vp);
+  const ns=new Set(neighborIds(selectedId));
+  G.edges.forEach(e=>{
+    let other=null,sup=false;
+    if(e.from===selectedId) other=e.to; else if(e.to===selectedId) other=e.from; else return;
+    if(e.label==="superseded by") sup=true;
+    const el=cardEl[other]; if(!el||el.offsetParent===null) return;
+    const tc=center(el,vp);
+    const ln=document.createElementNS("http://www.w3.org/2000/svg","line");
+    ln.setAttribute("x1",fc.x);ln.setAttribute("y1",fc.y);ln.setAttribute("x2",tc.x);ln.setAttribute("y2",tc.y);
+    if(sup) ln.setAttribute("class","sup");
+    edgesSvg.appendChild(ln);
+  });
+}
+function center(el,vp){ const r=el.getBoundingClientRect(); return {x:r.left+r.width/2-vp.left, y:r.top+r.height/2-vp.top}; }
+
+/* moving the edges svg out of the transformed stage so it stays in screen space */
+document.getElementById("viewport").appendChild(edgesSvg);
+edgesSvg.style.position="absolute";
+
+/* ============================ PAN / ZOOM ============================ */
+let panX=0,panY=0,zoom=1,dragging=false,sx=0,sy=0;
+const stage=document.getElementById("stage"), viewport=document.getElementById("viewport");
+function applyT(){ stage.style.transform="translate("+panX+"px,"+panY+"px) scale("+zoom+")"; drawEdges(); }
+viewport.addEventListener("mousedown",e=>{ if(e.target.closest(".card"))return; dragging=true; viewport.classList.add("panning"); sx=e.clientX-panX; sy=e.clientY-panY; });
+window.addEventListener("mousemove",e=>{ if(!dragging)return; panX=e.clientX-sx; panY=e.clientY-sy; applyT(); });
+window.addEventListener("mouseup",()=>{ dragging=false; viewport.classList.remove("panning"); });
+viewport.addEventListener("wheel",e=>{ e.preventDefault(); const f=e.deltaY<0?1.1:0.9; const nz=Math.min(2,Math.max(.35,zoom*f)); const r=viewport.getBoundingClientRect(); const mx=e.clientX-r.left, my=e.clientY-r.top; panX=mx-(mx-panX)*(nz/zoom); panY=my-(my-panY)*(nz/zoom); zoom=nz; applyT(); },{passive:false});
+
+/* ============================ STRUCTURE + SCREENS ============================ */
+function renderStructure(){
+  const el=document.getElementById("structure");
+  const folders=G.nodes.filter(n=>n.type==="folder");
+  el.innerHTML='<div class="tree"><h2 style="margin:0 0 14px">Project structure</h2>'+
+    (folders.length?folders.map(f=>{
+      const st=(f.status||"").split(" ")[0];
+      return '<div class="row"><div style="flex:1"><div class="folder">'+esc(f.name)+'</div><div class="det">'+esc(f.fields.Purpose||"")+
+        '</div><div class="det">owner: '+esc(f.fields.Owner||"—")+' · touch: '+esc(f.fields["Touch policy"]||"—")+'</div></div>'+
+        '<span class="badge '+esc(st)+'">'+esc(f.status||"")+'</span></div>';
+    }).join(""):'<p style="color:var(--muted)">No docs/structure.md found.</p>')+'</div>';
+}
+function renderScreens(){
+  const el=document.getElementById("screens");
+  const ss=G.nodes.filter(n=>n.type==="screen"&&visibleNode(n));
+  el.innerHTML='<h2 style="margin:0 0 14px">Screens</h2><div class="gallery">'+
+    (ss.length?ss.map(s=>'<div class="shot'+(s.retired?" retired":"")+'"><div class="ph">'+esc(s.name)+'</div><div class="cap"><div class="nm" style="font-weight:600">'+esc(s.name)+
+      '</div><div class="det" style="color:var(--muted);font-size:12px">'+esc(s.fields.Purpose||"")+'</div><div style="margin-top:5px"><span class="pill '+(s.retired?"retired":"active")+'">'+esc(s.status||"")+'</span> <span class="pill">'+esc(s.fields.Context||"")+'</span></div></div></div>').join(""):'<p style="color:var(--muted)">No docs/screens.md found.</p>')+'</div>';
+}
+
+/* ============================ TABS / CONTROLS ============================ */
+let tab="map";
+function showTab(t){
+  tab=t;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===t));
+  viewport.classList.toggle("hidden",t!=="map");
+  document.getElementById("edges").style.display=t==="map"?"":"none";
+  document.getElementById("structure").classList.toggle("show",t==="structure");
+  document.getElementById("screens").classList.toggle("show",t==="screens");
+  if(t==="structure") renderStructure(); else if(t==="screens") renderScreens(); else drawEdges();
+}
+document.getElementById("tabs").onclick=e=>{ const b=e.target.closest("button"); if(b) showTab(b.dataset.tab); };
+document.getElementById("mode").onchange=e=>{ mode=e.target.value; renderMap(); if(tab==="screens")renderScreens(); };
+document.getElementById("simplify").onchange=e=>{ simplify=e.target.checked; renderMap(); };
+document.getElementById("reset").onclick=()=>load(DEMO);
+
+// filters
+function buildFilters(){
+  const p=document.getElementById("filterpanel"); p.innerHTML="";
+  BANDS.forEach(b=>{
+    const id="f_"+b.key;
+    const lab=document.createElement("label"); lab.className="ctl switch";
+    lab.innerHTML='<input type="checkbox" id="'+id+'" '+(hiddenLayers.has(b.key)?"":"checked")+'> '+b.label;
+    lab.querySelector("input").onchange=ev=>{ if(ev.target.checked)hiddenLayers.delete(b.key); else hiddenLayers.add(b.key); renderMap(); };
+    p.appendChild(lab);
+  });
+}
+document.getElementById("filterbtn").onclick=()=>document.getElementById("filterpanel").classList.toggle("hidden");
+
+// search
+const searchEl=document.getElementById("search");
+searchEl.oninput=e=>{ query=e.target.value.trim().toLowerCase(); applyQuery(); };
+searchEl.onkeydown=e=>{ if(e.key==="Enter"){ const hit=G.nodes.find(n=>cardEl[n.id]&&n.name.toLowerCase().includes(query)); if(hit) select(hit.id); } };
+function applyQuery(){
+  for(const id in cardEl){ const c=cardEl[id]; c.classList.remove("dim","hit");
+    if(!query) continue;
+    if(byId[id].name.toLowerCase().includes(query)) c.classList.add("hit"); else c.classList.add("dim");
+  }
+}
+document.addEventListener("keydown",e=>{ if(e.key==="/"&&document.activeElement!==searchEl){ e.preventDefault(); searchEl.focus(); } if(e.key==="Escape"){ selectedId=null; document.getElementById("panel").classList.remove("show"); renderMap(); } });
+window.addEventListener("resize",drawEdges);
+
+/* ============================ LOADER ============================ */
+function load(files){
+  const parsed=parseProject(files);
+  buildGraph(parsed);
+  document.getElementById("projname").textContent=parsed.projectName||"Project-OS Viewer";
+  document.getElementById("projsub").textContent=(parsed.projectSub||"")+" · "+G.nodes.length+" nodes · "+G.edges.length+" links";
+  selectedId=null; blastOn=false; document.getElementById("panel").classList.remove("show");
+  buildFilters(); showTab("map"); renderMap();
+}
+// folder picker
+document.getElementById("folder").addEventListener("change",async e=>{
+  const fl=[...e.target.files].filter(f=>f.name.toLowerCase().endsWith(".md"));
+  if(!fl.length){ alert("No .md files found in that folder."); return; }
+  const files={};
+  for(const f of fl){ files[f.webkitRelativePath||f.name]=await f.text(); }
+  load(files);
+});
+// drag & drop a folder
+const dz=document.getElementById("drop");
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{ if(e.dataTransfer&&[...e.dataTransfer.types].includes("Files")){ e.preventDefault(); dz.classList.add("show"); }}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{ if(e.target===dz||ev==="drop") dz.classList.remove("show"); }));
+document.addEventListener("drop",async e=>{
+  e.preventDefault(); dz.classList.remove("show");
+  const items=[...(e.dataTransfer.items||[])].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
+  if(!items.length) return;
+  const files={};
+  async function walk(entry,prefix){
+    if(entry.isFile){ if(entry.name.toLowerCase().endsWith(".md")){ const f=await new Promise(r=>entry.file(r)); files[prefix+entry.name]=await f.text(); } }
+    else if(entry.isDirectory){ const rd=entry.createReader(); const ents=await new Promise(r=>rd.readEntries(r)); for(const c of ents) await walk(c,prefix+entry.name+"/"); }
+  }
+  for(const it of items) await walk(it,"");
+  if(Object.keys(files).length) load(files); else alert("No .md files found.");
+});
+
+/* boot */
+load(DEMO);
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+</script>
+</body>
+</html>
