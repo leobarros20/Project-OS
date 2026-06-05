@@ -1,6 +1,6 @@
 # PROJECT_OS_VIEWS.md
 
-**Status:** Working draft · 0.4
+**Status:** Working draft · 0.4.1
 **Purpose:** How to render the project map as static diagrams and the interactive viewer. This file is the rendering contract that complements the artifact contract in `PROJECT_OS.md` and the runtime contract in `PROJECT_OS_BEHAVIOR.md`.
 
 **Audience:** AI coding agents producing diagrams or building the viewer; humans reviewing what gets rendered.
@@ -26,6 +26,8 @@ What this file does NOT cover: which artifacts exist (see `PROJECT_OS.md`), how 
 ## Part 1 — Per-layer rendering specifications
 
 For each layer, this section defines what the rendered view must contain. Format is open — Mermaid, SVG, HTML, or any other surface — but the **content rules** are fixed.
+
+> **Depth principle — the technical layers are the most detailed.** Layers 3–6 must be rendered to the deepest resolution the project supports: system context → containers → components → files → function signatures. They are shown **by default** and are the deepest drill-down, never hidden behind an "advanced" toggle. A view that shows rich intent (L0–L2) but shallow structure (L3–L6) is incomplete — expand it before shipping it. The content requirements below are floors for the technical layers, not ceilings.
 
 ### Layer 0 — Outcomes
 
@@ -60,41 +62,55 @@ For each layer, this section defines what the rendered view must contain. Format
 
 ### Layer 3 — System context (C4 L1)
 
+**Source:** `docs/architecture.md` (System context section).
+
 **Required content:**
 
 - The product as one box at the center
 - External actors (humans) as labelled circles or person shapes
 - External systems (services, OS APIs, third-party SDKs) as labelled boxes
-- One short verb phrase per edge
+- One short verb phrase per edge, plus the data that crosses it and in which direction
+- Trust / data boundaries drawn explicitly (what is our code vs. external)
 
 ### Layer 4 — Containers (C4 L2)
 
+**Source:** `docs/architecture.md` (Containers section).
+
 **Required content:**
 
-- Each container labelled: name, runtime type (Activity, Service, server process, scene, database, etc.), one-line purpose, tech stack
-- Edges showing which container starts / binds / calls / reads / writes which
+- Each container labelled: name, runtime type (Activity, Service, server process, scene, database, etc.), one-line purpose, tech stack, the context(s) it hosts, and the state it owns
+- Edges showing which container starts / binds / calls / reads / writes which, labelled with the mechanism
 - Application boundary clearly visible (boxes inside = your code, boxes outside = external)
+- Every container rendered as its own node — never collapse two runtime units into one box to save space
+- Retired containers (`Deprecated` / `Superseded`) omitted from the current view, shown in the history view
 
 ### Layer 5 — Components (C4 L3)
 
-**Forcing rule:** render a components view for every container with more than ~500 lines of code or more than ~5 files. Single-file containers don't need decomposition.
+**Source:** `docs/components/NN-*.md`, one file per container.
+
+**Forcing rule:** render a components view for **every** container with more than ~500 lines of code or more than ~5 files. This is mandatory, not best-effort — it is where most of the map's real detail lives. Only a genuinely single-file container may skip decomposition.
 
 **Required content:**
 
 - Components inside one container, grouped by responsibility
-- Each labelled: name, one-line purpose, the context it belongs to, key file paths
-- Edges showing imports, calls, observation
+- Each labelled: name, one-line purpose, the context it belongs to, key file paths, and its public surface (the functions / classes other components call)
+- Edges showing imports, calls, observation — each labelled per Part 4
+- Telemetry events each component emits, as tags
+- A drill-down affordance from each component to its code-level (L6) view
 
 ### Layer 6 — Code (C4 L4)
 
-**Forcing rule:** render a code-level view for every component containing business logic worth tracing. Pure-rendering or pure-glue components don't need one. Regenerate on demand rather than maintaining by hand.
+**Source:** rendered directly from source files — code is the strongest evidence (`PROJECT_OS.md` Part 5), so L6 is generated, never hand-written as prose that would drift. But it is generated **comprehensively and on every relevant change**, and the viewer surfaces it as the deepest drill-down, not an afterthought.
+
+**Forcing rule:** render a code-level view for **every** component that carries business logic worth tracing. Pure-rendering or pure-glue components may be represented by their file alone.
 
 **Required content:**
 
-- Public functions and signatures
+- Public functions with full signatures
 - Key private functions that carry meaningful state
-- Direct call relationships within the component
-- File paths for IDE navigation
+- Types / interfaces the component defines or depends on
+- The direct call graph within the component
+- Clickable `file:line` references for every node, for IDE / repo navigation
 
 ---
 
@@ -105,6 +121,7 @@ For each layer, this section defines what the rendered view must contain. Format
 - **Split by flow second.** Layer 2 always renders one flow per diagram.
 - **Split by container third.** Layer 5 always renders one container per diagram. Layer 6 always renders one component per diagram.
 - **Never split Layer 0 (outcomes) or Layer 3 (system context).** These remain whole; if they grow too big, the project is doing too many things.
+- **Never collapse technical detail to save space.** When L4/L5/L6 grow, split into more diagrams — never merge containers or components into a single summary node. The technical layers are allowed to be the largest part of the map.
 
 ---
 
@@ -167,6 +184,7 @@ Format-agnostic, content-prescriptive.
 - Telemetry — coral accent
 - External systems — neutral gray
 - Inferred (awaiting confirmation) — dashed border or muted color
+- Retired (deprecated / superseded / abandoned) — muted and struck-through; hidden in the current view, shown only in the history view, where supersession is drawn as a `superseded by` edge to the replacement
 - Values and constraints — small italic annotations, not full nodes
 
 **Shapes:**
@@ -306,7 +324,7 @@ Every project organized under this OS ships with an interactive viewer at `docs/
 
 ### 8.0 — Why this exists
 
-Static Mermaid diagrams are good for AI agents and developers who can read Markdown. They are not enough for designers, PMs, founders, or anyone who needs to *navigate* a project rather than read it linearly. The viewer turns the artifact set into an explorable map.
+Static Mermaid diagrams are good for AI agents and developers who can read Markdown. They are not enough for designers, PMs, founders, or anyone who needs to *navigate* a project rather than read it linearly. The viewer turns the artifact set into an explorable map. It serves both audiences at once: non-technical readers navigate the intent layers, while builders drill the technical layers (L3–L6) down to components, files, and function signatures — those are the most detailed part of the map, not a hidden "advanced" mode.
 
 It is also the seed of a future product. The viewer specified below is intentionally small enough that an AI agent can build a working v0 in a single session of 2–3 hours.
 
@@ -332,13 +350,15 @@ The trade-off is parser fragility — if the AI writes `### Outcome 1` one day a
 7. **Filter by layer, context, or feature** — toggle visibility for whole groups.
 8. **Search by name** — find any node, file, or value across all artifacts.
 9. **Read-only by default.** The viewer does not write to source files. Edit-in-viewer is a future direction (see 8.7).
+10. **Current vs. history views.** The viewer defaults to the **Current** view, showing only active nodes (see `PROJECT_OS.md` Part 6). A **History** view (a header toggle that applies to every surface) reveals retired nodes — deprecated features, superseded decisions, abandoned outcomes, removed containers/screens — rendered muted, with supersession lineage (`superseded by` edges to whatever replaced each one). This is how you see "what the project used to look like" without retired cards cluttering the live map.
+11. **Deepest drill-down on the technical layers.** Clicking a container expands its components; clicking a component expands its code-level view with `file:line` deep links. The technical layers (L3–L6) are the most detailed part of the viewer and are reachable by drilling, not buried.
 
-**Non-coder mode (default):**
+**View depth — technical layers are shown by default:**
 
-- Layers 0–2 (intent: outcomes, contexts, flows) are visible by default.
-- Layers 3–6 (structural: C4) are hidden behind a "show technical view" toggle.
-- Plain-language descriptions on every node.
-- Visual hierarchy: outcomes biggest, code smallest.
+- The default view shows **all seven layers**, with the technical layers (L3–L6) expanded and drillable. They are the most detailed part of the map, not an opt-in.
+- An optional **Simplify** toggle (off by default) collapses the map to the intent layers (L0–L2) for non-technical readers who want orientation without the structural detail. This is the inverse of the old "hide the technical view" default — technical detail is now first-class, and hiding it is the deliberate exception.
+- Plain-language descriptions on every node, at every layer.
+- Visual hierarchy by altitude: outcomes are the largest nodes, code the smallest — but smallest does not mean hidden; the code layer carries the most nodes and the most detail.
 
 ### 8.2 — What the viewer reads
 
@@ -347,6 +367,8 @@ The viewer is a pure read tool. It reads the live `docs/` tree on load:
 - `docs/outcomes.md` — Layer 0 content
 - `docs/contexts.md` — Layer 1 content
 - `docs/flows.md` — Layer 2 content
+- `docs/architecture.md` — Layers 3–4 content (system context, containers)
+- `docs/components/*.md` — Layer 5 content (components per container)
 - `docs/structure.md` — filesystem inventory; powers the Structure view
 - `docs/features/*.md` — feature overlay
 - `docs/decisions/*.md` — decision overlay
@@ -381,50 +403,58 @@ When the viewer loads, the user sees:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  [Project name]                              [non-coder/full] ▼│
+│  [Project name]                              [Current ▾] [Simplify]│
 │  [Project summary one-liner]                                    │
 ├─────────────────────────────────────────────────────────────────┤
 │  [ Map ] [ Structure ] [ Screens ]    Search ▢   Filter ▼      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│      L0 — Outcomes (4 confirmed)                                │
+│      L0 — Outcomes (4 active)                                   │
 │        ◉ Outcome 1  ◉ Outcome 2  ◉ Outcome 3  ◉ Outcome 4       │
 │              ↓                                                  │
-│      L1 — Contexts (7 confirmed)                                │
+│      L1 — Contexts (7 active)                                   │
 │        [Context regions, with entities and folders inside]      │
 │              ↓                                                  │
 │      L2 — Flows (5 named)                                       │
 │        Flow A → Flow B → Flow C ...                             │
 │                                                                 │
-│      [▾ Show technical view (L3–L6)]                            │
+│      ▾ L3–L6 technical layers (shown)                            │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-The top tab strip switches between the primary surfaces:
+Two header controls sit above every surface:
 
-- **Map** (default) — the seven-layer graph described above
+- **Current / History** — `Current` (default) shows only active nodes, so the map always reflects the project as it stands today. `History` adds the retired nodes (deprecated, superseded, abandoned, removed) muted, with `superseded by` edges to their replacements — the "older versions" view.
+- **Simplify** — off by default. When on, it collapses the map to the intent layers (L0–L2) for non-technical readers. Off (the default), all seven layers show, with the technical layers expanded and drillable.
+
+The top tab strip switches between the primary surfaces (both header controls apply to all three):
+
+- **Map** (default) — the seven-layer graph described above, technical layers shown by default
 - **Structure** — `docs/structure.md` rendered as an interactive tree of the project's folders, with status badges, owner tags, and touch-policy notes. Clicking a folder reveals its purpose and what relates to it in the Map view.
 - **Screens** — `docs/screens.md` rendered as a gallery of the latest QA captures, with filters by context and flow.
 
 Clicking a node (on any surface) opens a side panel with:
 
-- The node's name and status
+- The node's name and status (active or retired; if retired, what superseded it and when)
 - Plain-language description
 - Tagged values and constraints (for outcomes and contexts)
-- Source files (for code-level nodes)
+- For technical nodes: runtime type / tech stack (containers), public surface (components), source files and function signatures with `file:line` deep links (code)
 - Related nodes — "depends on" and "depended on by"
 - A "blast radius" button — highlights everything affected if this node changes
-- Direct links to the underlying Markdown file in the repo
+- Direct links to the underlying Markdown file (or source file) in the repo
 
 ### 8.6 — Interaction primitives
 
 The viewer must support:
 
 - **Click:** select a node, open side panel.
+- **Click to expand (technical layers):** clicking a container reveals its components; clicking a component reveals its code-level view with `file:line` links.
 - **Shift-click:** add to selection (multi-select for comparison).
 - **Hover:** preview node name and one-line description in a tooltip.
 - **Double-click:** zoom to fit the selected node and its immediate neighbours.
+- **Current / History toggle:** switch between the live project and the older-versions view.
+- **Simplify toggle:** collapse to the intent layers for non-technical readers.
 - **Keyboard `/`:** focus search.
 - **Keyboard `Esc`:** clear selection.
 - **Filter toggles:** show/hide layers, contexts, features individually.
@@ -450,19 +480,21 @@ When an agent is asked to scaffold the viewer (as part of bootstrap, or on reque
 2. Create `docs/viewer/index.html` as a single self-contained file.
 3. Include CDN imports for the Markdown parser and (optionally) a graph library.
 4. Implement, in order:
-   - Load and parse all relevant Markdown files from `docs/`.
-   - Build an in-memory graph: nodes = outcomes / contexts / flows / containers / components / functions / features / decisions; edges = the canonical vocabulary from Part 4 of this file.
-   - Render the seven-layer Map view with non-coder defaults (intent layers visible, structural layers behind a toggle).
+   - Load and parse all relevant Markdown files from `docs/` — including `docs/architecture.md` and every `docs/components/*.md`.
+   - Build an in-memory graph: nodes = outcomes / contexts / flows / containers / components / functions / features / decisions; edges = the canonical vocabulary from Part 4 of this file. Tag every node with its lifecycle status (active or retired, per `PROJECT_OS.md` Part 6).
+   - Render the seven-layer Map view with **technical layers shown by default** and expanded to component/code depth. The `Simplify` toggle (off by default) is what hides L3–L6, not the reverse.
+   - Implement the **Current / History** toggle: Current hides retired nodes; History shows them muted with `superseded by` edges.
+   - Implement technical drill-down: container → components → code-level view with `file:line` links.
    - Render the Structure view from `docs/structure.md` — a tree with status badges, clickable folders that surface purpose/owner/touch-policy.
    - Render the Screens view from `docs/screens.md` — a simple gallery of latest captures.
-   - Add a top tab strip switching between Map / Structure / Screens.
-   - Add click handlers that open a side panel with the node's details (works on any surface).
+   - Add a top tab strip switching between Map / Structure / Screens, plus the Current/History and Simplify header controls (they apply to all surfaces).
+   - Add click handlers that open a side panel with the node's details (works on any surface), including signatures and `file:line` links for technical nodes.
    - Add the "depends on" and "blast radius" computations.
    - Add filter toggles and search.
 5. Test by opening `docs/viewer/index.html` directly from the file system. It must work without a server.
 6. Verify that the viewer reflects the current state of `docs/` — making a small edit to `docs/outcomes.md` and reloading the viewer should show the change.
 
-A working v0 should fit in **under 1500 lines** of HTML + CSS + inline JavaScript. The Linger `all-layers.html` reference is a good starting point but does less than this spec asks for — particularly the dependency views, blast radius, and side panel details. Use it as inspiration, not as a target.
+A working v0 should stay compact (**~1500–2000 lines** of HTML + CSS + inline JavaScript). The Linger `all-layers.html` reference is a good starting point but does less than this spec asks for — particularly the technical drill-down, the Current/History split, the dependency views, blast radius, and side panel details. Use it as inspiration, not as a target.
 
 ### 8.9 — Test for the viewer
 
@@ -475,7 +507,13 @@ The viewer is working if a non-coder can:
 5. Click a feature and see which flow it drives and which screens it touches.
 6. Find the answer to "if I change feature X, what else is affected?" without reading any source code.
 
-If a non-coder fails any of these, the viewer needs work.
+And if a builder can:
+
+7. See the technical layers (L3–L6) on load, without enabling any toggle.
+8. Drill from a container to its components to a specific function signature, reaching a `file:line` link to the source — without leaving the viewer.
+9. Toggle to **History** and find a deprecated feature or superseded decision that is hidden in the **Current** view, with a visible pointer to whatever replaced it.
+
+If a non-coder fails 1–6, or a builder fails 7–9, the viewer needs work.
 
 ---
 

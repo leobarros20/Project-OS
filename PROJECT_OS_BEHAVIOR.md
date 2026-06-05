@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.4
+**Status:** Working draft · 0.4.1
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, and bootstrapping. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -32,26 +32,39 @@ Read, in this order:
 5. `docs/outcomes.md` — full, including tagged values and constraints
 6. `docs/contexts.md` — full, including tagged values and constraints
 7. `docs/structure.md` — full. Tells you what every folder in the project is for.
-8. `docs/flows.md` — only if the task touches user-facing behaviour or sequencing
-9. `docs/decisions/` — titles only, then full reading of any decision relevant to the task
-10. `docs/features/` — only the features relevant to the task
-11. `docs/screens.md` — only if the task involves UI
-12. `docs/telemetry.md` — only if the task involves measurement or outcomes
-13. `PROJECT_OS_VIEWS.md` — only if the task involves rendering or the viewer
-14. `.ai-history/` if present — scan recent files for context from prior sessions
+8. `docs/architecture.md` — full. The technical map: system context (L3) and containers (L4). Read before touching code so you know the runtime shape you're changing.
+9. `docs/components/` — titles of all; full reading of the file for any container whose internals the task touches (L5).
+10. `docs/flows.md` — only if the task touches user-facing behaviour or sequencing
+11. `docs/decisions/` — titles only, then full reading of any decision relevant to the task
+12. `docs/features/` — only the features relevant to the task
+13. `docs/screens.md` — only if the task involves UI
+14. `docs/telemetry.md` — only if the task involves measurement or outcomes
+15. `PROJECT_OS_VIEWS.md` — only if the task involves rendering or the viewer
+16. `.ai-history/` if present — scan recent files for context from prior sessions
 
 Only after reading the above does the AI begin work.
+
+### Checking for OS updates (at session start)
+
+This OS evolves. At the start of a session, check whether a newer version of the contract exists — don't silently run on a stale one.
+
+1. Read the local version from the `Status:` line of `PROJECT_OS.md`.
+2. Fetch the canonical `PROJECT_OS.md` from the source repo (https://github.com/leobarros20/Project-OS — the raw file on `main`, or the latest release tag) and read its `Status:` line. If there's no network access, skip this check silently.
+3. If the canonical version is newer, tell the user in one line — "Project-OS [new] is available; this project is on [old]" — and offer to apply it. Never auto-apply: updating the contract and migrating the project's artifacts is the user's call.
+4. If the user accepts, follow the `CHANGELOG.md` migration steps for each version between the local one and the latest, in order; overwrite the three spec files; then record the upgrade in `JOURNAL.md`.
+5. Keep it non-blocking and quiet: if the project is already current, say nothing; if the user says "skip," don't re-ask that day.
 
 ### During work — the autonomous cadence
 
 The AI updates artifacts continuously, in the background. It does NOT pause to ask permission for each change. Triggers:
 
-- **After every code change that touches structure:** update `docs/screens.md` if a screen changed, the relevant feature spec if scope shifted, `docs/data-model.md` if an entity changed, `docs/permissions.md` or `docs/integrations.md` if external surface changed, `docs/telemetry.md` if events changed, `docs/contexts.md` if module ownership changed, `docs/flows.md` if a flow's steps changed.
+- **After every code change that touches structure:** update `docs/architecture.md` if a container, external dependency, or runtime topology changed; update the relevant `docs/components/NN-*.md` if a component's responsibility, public surface, or call graph changed; update `docs/screens.md` if a screen changed, the relevant feature spec if scope shifted, `docs/data-model.md` if an entity changed, `docs/permissions.md` or `docs/integrations.md` if external surface changed, `docs/telemetry.md` if events changed, `docs/contexts.md` if module ownership changed, `docs/flows.md` if a flow's steps changed. Regenerate the affected `docs/diagrams/c4-*.md` (containers, components, code) views.
 - **After a meaningful decision is made:** draft a decision doc with status `Proposed`. Pull the alternatives section from the active conversation.
 - **When the user implies a value or constraint:** ask one short Mode 2 clarification (see Part 2), then tag the captured value onto the affected outcome or context.
 - **Every couple of hours of active work:** append a checkpoint entry to `JOURNAL.md`.
 - **After major changes:** append a new revision to `PROJECT_SUMMARY.md` and/or `README.md` if framing or architecture shifted meaningfully.
-- **At the end of every session:** write a session-summary journal entry; propose screen captures for UI-touched screens (per Part 4.7 of `VIEWS.md`); verify `PROJECT_SUMMARY.md` still matches reality; regenerate any stale diagrams.
+- **At the end of every session:** write a session-summary journal entry; propose screen captures for UI-touched screens (per Part 7 of `VIEWS.md`); verify `PROJECT_SUMMARY.md` still matches reality; regenerate any stale diagrams.
+- **Keep the technical layers the most detailed.** Because L3–L6 are the most detailed layers of the map (`PROJECT_OS.md` Part 4.0.1), hold `docs/architecture.md` and `docs/components/` in lockstep with the code on every structural change. They must never drift into being thinner or staler than the intent layers; when in doubt, deepen them.
 
 ### What the AI must surface (and pause on) before committing
 
@@ -195,11 +208,13 @@ If starting from an existing project that does NOT follow this OS:
 9. **Commit `docs/flows.md`** with at least the onboarding flow and the core loop.
 10. **Commit `docs/screens.md`** if the project has surfaces. Tag each with its context.
 11. **Commit `docs/data-model.md`, `docs/permissions.md`, `docs/integrations.md`, `docs/telemetry.md`** with what's in the codebase. If telemetry doesn't exist yet, note that and propose a minimal starter event set.
-12. **Identify implicit decisions** in the code. Draft a decision doc for each, status `Proposed`.
-13. **Render the diagrams in `docs/diagrams/`** per `VIEWS.md` — master map first, then per-layer views.
-14. **Scaffold `docs/viewer/index.html`** per the viewer spec in `VIEWS.md`. The viewer is part of the bootstrap, not optional.
-15. **Surface inferred content in a single Mode 3 check-in** — present up to 3 of the most important uncertainties for the user to confirm in one short pass.
-16. **Begin normal cadence.** Cleanup of stale files (per Part 6) is its own separate flow, not bootstrap.
+12. **Commit `docs/architecture.md`** — the system context (L3) and every container (L4) you can identify from the manifest, entry points, and runtime config. This is the most detailed structural artifact; capture runtime type, tech stack, state owned, and how containers talk. Do not stub it thinly.
+13. **Commit `docs/components/NN-*.md`** for every container over the L5 forcing-rule threshold (~500 LOC or ~5 files) — decompose each into components with real file paths, public surface, and call edges.
+14. **Identify implicit decisions** in the code. Draft a decision doc for each, status `Proposed`.
+15. **Render the diagrams in `docs/diagrams/`** per `VIEWS.md` — master map first, then per-layer views. Render the technical layers (containers, components, code) to full depth, not just the intent layers; the structural views are the most detailed.
+16. **Scaffold `docs/viewer/index.html`** per the viewer spec in `VIEWS.md`. The viewer is part of the bootstrap, not optional. It must default to the **current** view with technical layers shown (not hidden behind a toggle).
+17. **Surface inferred content in a single Mode 3 check-in** — present up to 3 of the most important uncertainties for the user to confirm in one short pass.
+18. **Begin normal cadence.** Cleanup of stale files (per Part 6) is its own separate flow, not bootstrap.
 
 An inferred-and-marked artifact beats an empty one. A confident guess does not.
 

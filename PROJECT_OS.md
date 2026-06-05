@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.4
+**Status:** Working draft · 0.4.1
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -11,6 +11,8 @@
 - `PROJECT_OS_VIEWS.md` — how to render the project map as diagrams and an interactive viewer.
 
 **Reading order for an AI agent starting a session:** read this file in full, then `PROJECT_OS_BEHAVIOR.md` in full, then `PROJECT_OS_VIEWS.md` if the task involves rendering or visualization. Only then begin work.
+
+**Canonical source & versioning:** The version of record lives at https://github.com/leobarros20/Project-OS. The current version is the `Status:` line at the top of each spec file (the three files move in lockstep). `CHANGELOG.md` in that repo records what changed between versions and how to upgrade an existing project. At session start an agent checks whether a newer version exists and offers to apply it — see `PROJECT_OS_BEHAVIOR.md` Part 1, "Checking for OS updates."
 
 ---
 
@@ -71,6 +73,7 @@ PROJECT_SUMMARY.md
 JOURNAL.md
 docs/outcomes.md
 docs/structure.md
+docs/architecture.md
 ```
 
 ### Filled in as the project grows
@@ -89,6 +92,10 @@ docs/decisions/
 docs/screens.md
 docs/screens/
   YYYY-MM-DD-screen-name.png   (QA captures — see VIEWS.md)
+
+docs/components/
+  01-container-name.md      (L5 — one per significant container; see docs/architecture.md)
+  ...
 
 docs/data-model.md
 docs/permissions.md
@@ -131,7 +138,7 @@ This folder is not required. When transcripts are present, the AI uses them as a
   MANIFEST.md
 ```
 
-Created when the AI proposes a cleanup or migration of stale files (see `BEHAVIOR.md` Part 7). Files moved here are NOT deleted automatically; they remain quarantined until the user confirms in a later session. The folder's `MANIFEST.md` tracks what was moved, when, why, and from where.
+Created when the AI proposes a cleanup or migration of stale files (see `BEHAVIOR.md` Part 6). Files moved here are NOT deleted automatically; they remain quarantined until the user confirms in a later session. The folder's `MANIFEST.md` tracks what was moved, when, why, and from where.
 
 **The forcing rule:** if an artifact's content is unknown, the AI fills it with its best inference and marks the section `Status: Inferred`. Empty mandatory files are a failure state. Inferred-and-marked is the floor.
 
@@ -163,6 +170,8 @@ Each file below has a **purpose**, a **template**, and **structural rules**. Mai
 - `docs/outcomes.md` — what success looks like
 - `docs/contexts.md` — how the system is naturally divided
 - `docs/flows.md` — what happens in order, end to end
+- `docs/architecture.md` — the technical map: system context + containers (the most detailed layers)
+- `docs/components/` — components inside each container
 - `docs/features/` — feature specs
 - `docs/decisions/` — why the system is shaped this way
 - `docs/screens.md` — screens / scenes / pages inventory
@@ -367,7 +376,7 @@ The natural divisions of this project. Each context owns one consistent meaning 
 
 ## Context 1 — [Name]
 
-**Status:** Confirmed | Inferred
+**Status:** Confirmed | Inferred | Superseded
 **One-line purpose:** [What does this part of the system care about?]
 
 **Key concepts here (and what they mean in this context):**
@@ -559,7 +568,7 @@ End-to-end paths through the system. Each flow is a timeline crossing one or mor
 ~~~markdown
 # Screen inventory
 
-One row per screen. Visual captures during QA live in `docs/screens/` named `YYYY-MM-DD-screen-name.png`.
+One row per screen. Visual captures during QA live in `docs/screens/` named `YYYY-MM-DD-screen-name.png`. Mark a retired surface by setting its Name cell to `[name] (Deprecated)` or adding a `Status` column; retired screens are never removed from the table — they move to the viewer's history view (see `VIEWS.md` Part 8).
 
 | # | Name | Route / trigger | Purpose | Context | Entry from | Exits to | Design | Code | Latest QA capture |
 |---|------|-----------------|---------|---------|------------|----------|--------|------|-------------------|
@@ -765,7 +774,132 @@ A map of every top-level directory and notable subdirectory in this project. Upd
 - A file or folder is moved or archived
 - A new orphan is discovered
 
-When the AI proposes archival or deletion of any directory, it must update this file in the same change. See `BEHAVIOR.md` Part 7 for the cleanup protocol.
+When the AI proposes archival or deletion of any directory, it must update this file in the same change. See `BEHAVIOR.md` Part 6 for the cleanup protocol.
+
+---
+
+### 3.15 — docs/architecture.md
+
+**Purpose:** The durable home for the technical layers **L3 (system context)** and **L4 (containers)** — how the system is actually built and runs. Where the intent files answer *why* and *what*, this answers *how*. It is maintained continuously alongside the code and is, with `docs/components/`, the most detailed structural artifact in the OS. A day-one file: starts as a stub describing the deployable system and grows as containers are added.
+
+~~~markdown
+# Architecture
+
+The technical map of the system. Durable home for Layer 3 (system context) and Layer 4 (containers), maintained in lockstep with the code. When this file and the code disagree, the code wins and this file is corrected (see `PROJECT_OS.md` Part 5).
+
+## System context (Layer 3)
+
+**The product:** [one line — the deployable system as a whole]
+
+**External actors:**
+- **[Actor]** — [who they are; how they interact]
+
+**External systems and dependencies:**
+- **[System / SDK / API]** — [what we use it for; protocol] — see `docs/integrations.md`
+
+**Trust / data boundaries:** [what data crosses each boundary, and in which direction]
+
+**Rendered view:** `docs/diagrams/c4-context.md`
+
+---
+
+## Containers (Layer 4)
+
+A container is anything that runs as its own process or deployable unit: an app, a service, a database, a worker, a client bundle, a game-scene host.
+
+### Container 1 — [Name]
+
+**Status:** Current | Planned | Deprecated | Superseded by [name]
+**Runtime type:** [Activity / service / server process / scene / database / worker / client bundle / ...]
+**One-line purpose:** [what this container is responsible for]
+**Tech stack:** [language, framework, key libraries]
+**Hosts contexts:** [from `docs/contexts.md` — a container may host one or more contexts]
+**Entry point:** [path]
+**Components:** see `docs/components/NN-[name].md` (L5)
+
+**Talks to:**
+- **[Other container / external system]** — via [calls | reads | writes | starts | binds | events to]
+
+**State it owns:** [data stores, queues, caches — cite `docs/data-model.md` entities]
+
+**Runtime / scaling notes:** [concurrency, lifecycle, where it is deployed]
+
+---
+
+### Container 2 — [Name]
+[...]
+
+---
+
+## Runtime topology
+
+[How the containers connect at runtime. The application boundary must be explicit: which boxes are our code and which are external. Pointer to `docs/diagrams/c4-containers.md`.]
+
+## Build, deploy, hosting
+
+[How each container is built and where it runs. Pointer to CI / deploy config.]
+
+---
+
+## Revision history
+- YYYY-MM-DD · [author] — [what changed]
+~~~
+
+**Structural rules:**
+
+- One Container subsection per runtime unit. Never collapse two runtime units into one entry.
+- Every container over the L5 forcing-rule threshold links down to its `docs/components/` file.
+- **Never delete a container** — mark it `Deprecated` or `Superseded by [name]`. Retired containers stay in the file and surface in the viewer's history view (see `VIEWS.md` Part 8 and Part 6 below).
+- The prose here is authored and maintained; only the L3/L4 *diagrams* are rendered.
+
+---
+
+### 3.16 — docs/components/
+
+**Purpose:** **Layer 5.** One file per significant container, decomposing it into components — the responsibility-clusters of modules inside that container, their key files, public surface, and how they call and import each other. This is the deepest *authored* technical layer; below it, **Layer 6 (code)** is rendered directly from source.
+
+**File naming:** `NN-container-name.md`, matching the container in `docs/architecture.md`. Don't renumber when containers are added or removed.
+
+**Forcing rule:** create a components file for **every container over ~500 lines of code or ~5 files**. A genuinely single-file container may be represented by its file alone.
+
+~~~markdown
+# NN — [Container name] components
+
+**Container:** [name from `docs/architecture.md`]
+**Status:** Current | Deprecated | Superseded by [name]
+**Hosts contexts:** [from `docs/contexts.md`]
+**Last updated:** YYYY-MM-DD · [author]
+
+## Component map
+[Pointer to `docs/diagrams/c4-components-[container].md`, plus an ASCII sketch of the components and their edges.]
+
+---
+
+## Component 1 — [Name]
+
+**Responsibility:** [the single thing this component is responsible for]
+**Belongs to context:** [from `docs/contexts.md`]
+**Key files:**
+- `path/to/file` — [what it does]
+
+**Public surface:** [the functions / classes other components call — names + one line each]
+**Imports / calls:**
+- **[Other component]** — [why]
+
+**Emits events:** [telemetry events fired here — from `docs/telemetry.md`]
+**Code-level view (L6):** `docs/diagrams/c4-code-[component].md` (rendered from source)
+
+---
+
+## Component 2 — [Name]
+[...]
+~~~
+
+**Structural rules:**
+
+- One Component subsection per responsibility cluster.
+- Always cite real file paths so the viewer can deep-link and L6 can be rendered from them.
+- **Never delete a component** — mark its status; deprecated components surface in the history view.
 
 ---
 
@@ -803,6 +937,15 @@ Values            Tagged onto outcomes and contexts; constrain everything below.
 
 When rendering, **never show features, decisions, telemetry, or values as their own layer**. They are overlays, edges, or annotations on the layers.
 
+### 4.0.1 — The depth principle
+
+The structural layers (L3–L6) are the **most detailed layers of the map**. The intent layers (L0–L2) answer *why* and *what happens* in a handful of nodes each; the structural layers answer *how the system is actually built and runs*, and they must be captured and rendered to the deepest resolution the project supports — system context down to containers, containers down to components, components down to files and function signatures.
+
+This has two consequences the rest of the OS enforces:
+
+- **Durable technical artifacts.** L3–L4 live in `docs/architecture.md` and L5 in `docs/components/`, maintained continuously alongside the code with at least the rigor of `docs/outcomes.md` or `docs/contexts.md`. L6 is rendered directly from source (code is the strongest evidence — see Part 5) but rendered comprehensively, not sketched.
+- **Technical layers are first-class in every view.** A rendering or viewer that shows rich intent but shallow structure is incomplete. The technical layers are shown by default and are the deepest drill-down, never hidden behind an "advanced" toggle. See `VIEWS.md` Part 1 (depth principle) and Part 8 (viewer defaults).
+
 ### 4.1 — Source artifacts per layer
 
 For each layer, the artifacts that feed it.
@@ -812,10 +955,10 @@ For each layer, the artifacts that feed it.
 | L0 Outcomes | `docs/outcomes.md` | `docs/telemetry.md`, `docs/features/` |
 | L1 Contexts | `docs/contexts.md` | `docs/data-model.md`, `docs/features/`, code folders |
 | L2 Flows | `docs/flows.md` | `docs/screens.md`, `docs/telemetry.md`, `docs/features/` |
-| L3 System context | `PROJECT_SUMMARY.md` | `docs/integrations.md`, `docs/permissions.md`, `docs/structure.md`, manifest |
-| L4 Containers | manifest, top-level folder structure | `PROJECT_SUMMARY.md` |
-| L5 Components | per-container source code | `docs/screens.md`, `docs/features/`, `docs/contexts.md`, `docs/decisions/` |
-| L6 Code | source files | type signatures, public APIs |
+| L3 System context | `docs/architecture.md`, `PROJECT_SUMMARY.md` | `docs/integrations.md`, `docs/permissions.md`, `docs/structure.md`, manifest |
+| L4 Containers | `docs/architecture.md`, manifest, top-level folder structure | `PROJECT_SUMMARY.md`, `docs/structure.md` |
+| L5 Components | `docs/components/`, per-container source code | `docs/screens.md`, `docs/features/`, `docs/contexts.md`, `docs/decisions/` |
+| L6 Code | source files, rendered code views (`docs/diagrams/c4-code-*.md`) | type signatures, public APIs, `docs/components/` |
 
 ---
 
@@ -848,7 +991,35 @@ How the AI handles drift is specified in `BEHAVIOR.md`.
 
 ---
 
-## Part 6 — What this file does not include
+## Part 6 — Lifecycle status and project history
+
+Every node in the map carries a lifecycle status, and nodes are **never deleted** — when something is dropped, reversed, or replaced, its status changes and it stays in the artifacts. This is what preserves the project's history, and it is what makes the viewer's **history view** possible (see `VIEWS.md` Part 8).
+
+### Active vs. retired statuses
+
+Each artifact's status values fall into two groups. **Active** = part of the project as it stands today. **Retired** = real history, kept for the record but no longer the current plan.
+
+| Artifact | Active (shown in the current view) | Retired (shown only in the history view) |
+|---|---|---|
+| Outcomes | Confirmed, Inferred, Achieved | Abandoned, Superseded |
+| Contexts | Confirmed, Inferred | Superseded |
+| Features | Planned, In progress, Shipped | Deprecated |
+| Decisions | Proposed, Accepted | Deprecated, Superseded by NNNN |
+| Containers / Components | Current, Planned | Deprecated, Superseded |
+| Screens | active rows in the inventory | Deprecated / Removed |
+
+`Achieved` is **active**, not retired — a met outcome is still true. Only things that no longer describe the project today (abandoned, superseded, deprecated, removed) are retired.
+
+### The rule
+
+- Changing direction is a **status change plus a pointer**, never a deletion. A superseded decision points to the one that replaced it (`Superseded by NNNN`); a deprecated feature notes what replaced it and when; a removed screen names its successor.
+- Retired nodes keep **all their edges**. The history view reconstructs "what the project used to look like" from them, with supersession lineage drawn explicitly.
+- The current view hides retired nodes entirely, so it always reflects the project as it stands today.
+- The only mechanism that removes a *file* is the cleanup/archival flow in `BEHAVIOR.md` Part 6 — and that is for stale files left on disk, never for retiring a live node.
+
+---
+
+## Part 7 — What this file does not include
 
 - **AI behaviour during sessions.** See `PROJECT_OS_BEHAVIOR.md`.
 - **Rendering and visualization.** See `PROJECT_OS_VIEWS.md`.
