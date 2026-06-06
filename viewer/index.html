@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Project-OS Viewer</title>
 <!--
-  Project-OS — reference viewer (v0.5)
+  Project-OS — reference viewer (v0.5.1)
   Single self-contained file. No build step, no server required, no external dependencies.
   Implements the spec in PROJECT_OS_VIEWS.md Part 8:
     - Eight-layer Map with technical layers (L3-L7) shown BY DEFAULT
@@ -155,6 +155,25 @@
   input[type=color]{border:1px solid var(--line);border-radius:5px;cursor:pointer;padding:1px}
   .val-display{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;min-width:40px;display:inline-block}
   .secret-mask{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);letter-spacing:2px}
+
+  /* LEDGER TAB */
+  #ledger-view{position:absolute;inset:0;overflow:auto;padding:20px 26px}
+  .ledger-filters{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .ledger-filters label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .ledger-filters input[type=date]{border:1px solid var(--line);border-radius:7px;padding:5px 8px;font:inherit;background:var(--panel);color:var(--ink)}
+  .stat-cards{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+  .stat-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;min-width:150px;box-shadow:var(--shadow)}
+  .stat-card .st-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;font-weight:700}
+  .stat-card .st-value{font-size:22px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .stat-card .st-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .ledger-table{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+  .ledger-table th{text-align:left;padding:8px 14px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--line);background:var(--neutral-bg)}
+  .ledger-table td{padding:9px 14px;border-bottom:1px solid var(--line)}
+  .ledger-table tr:last-child td{border-bottom:0}
+  .ledger-table tr:hover td{background:#f8f9fb}
+  .ledger-table .totals-row td{font-weight:700;background:var(--neutral-bg);border-top:2px solid var(--line)}
+  .ledger-tokens{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:600;text-align:right}
+  .ledger-model{font-size:11.5px;background:var(--struct-bg);color:var(--struct);padding:2px 7px;border-radius:5px;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 </style>
 </head>
 <body>
@@ -176,6 +195,7 @@
       <button data-tab="structure">Structure</button>
       <button data-tab="screens">Screens</button>
       <button data-tab="constants">Constants ⚡</button>
+      <button data-tab="ledger">Ledger 📊</button>
     </div>
     <span class="ctl">View
       <select id="mode">
@@ -205,6 +225,7 @@
   <div class="sheet" id="structure"></div>
   <div class="sheet" id="screens"></div>
   <div class="sheet" id="constants-view"></div>
+  <div class="sheet" id="ledger-view"></div>
   <div id="panel"><div class="ph"><span class="x" id="panelx">×</span><h2 id="pn"></h2><div id="pp"></div></div><div class="body" id="pbody"></div></div>
   <div id="drop"><div class="box"><b>Drop a project folder here</b><br>or click “Open project…”. The viewer reads its <code>docs/</code> tree.<br><br><span id="dropmsg"></span></div></div>
 </main>
@@ -470,6 +491,16 @@ Move sync to a single GraphQL reconcile mutation. Supersedes 0002.
 | MAX_BATCH_SIZE | 100 | integer | 1 | 1000 | Records per sync batch |
 | SYNC_INTERVAL_MS | 30000 | ms | 1000 | 300000 | Background sync cadence |
 | API_SECRET | [set in environment] | secret | — | — | Server signing key |
+`,
+"docs/token-ledger.md":`# Token Ledger
+
+AI compute usage per session. Append a new row at the end of each session.
+
+| Timestamp | Model | Input | Output | Total | Task |
+|-----------|-------|-------|--------|-------|------|
+| 2026-06-04 09:12 UTC | claude-sonnet-4-5 | 18400 | 4200 | 22600 | Initial bootstrap: outcomes, contexts, architecture |
+| 2026-06-05 14:33 UTC | claude-sonnet-4-5 | 31200 | 8900 | 40100 | v0.4.1 spec: technical layers depth, current/history split |
+| 2026-06-06 10:44 UTC | claude-sonnet-4-5 | 44800 | 12400 | 57200 | v0.5: L7 constants, canvas view, viewer polish |
 `
 };
 
@@ -635,6 +666,7 @@ function parseProject(files){
 
 /* ============================ CONSTANTS PARSER ============================ */
 let constantGroups=[], proposed=[];
+let ledgerEntries=[], ledgerFrom="", ledgerTo="";
 
 function parseConstants(files){
   constantGroups=[];
@@ -660,6 +692,36 @@ function parseConstants(files){
       constantGroups.push({name,scope,source,constants:consts,file:path});
     });
   }
+}
+
+/* ============================ LEDGER PARSER ============================ */
+function parseLedger(files){
+  ledgerEntries=[];
+  for(const path in files){
+    if(!/token-ledger\.md$/i.test(path)) continue;
+    const md=files[path]||"";
+    // rows that start with | but are NOT separator lines (all dashes/colons)
+    const rows=md.split("\n").filter(l=>l.trim().startsWith("|")&&!/^\s*\|[\s|:-]+\|?\s*$/.test(l));
+    if(rows.length<2) continue;
+    const head=rows[0].split("|").map(c=>c.trim()).filter(Boolean);
+    const ci=n=>head.findIndex(h=>norm(h)===norm(n));
+    rows.slice(1).forEach(r=>{
+      const c=r.split("|").map(x=>x.trim()).filter(Boolean);
+      if(!c.length) return;
+      const ts=c[ci("Timestamp")>=0?ci("Timestamp"):0]||"";
+      if(!ts||norm(ts)==="timestamp") return;
+      const model=c[ci("Model")>=0?ci("Model"):1]||"";
+      const inp=parseInt((c[ci("Input")>=0?ci("Input"):2]||"0").replace(/,/g,""))||0;
+      const out=parseInt((c[ci("Output")>=0?ci("Output"):3]||"0").replace(/,/g,""))||0;
+      const tot=parseInt((c[ci("Total")>=0?ci("Total"):4]||"0").replace(/,/g,""))||0;
+      const task=c[ci("Task")>=0?ci("Task"):5]||"";
+      const dateM=ts.match(/(\d{4}-\d{2}-\d{2})/);
+      const date=dateM?dateM[1]:"";
+      ledgerEntries.push({ts,date,model,input:inp,output:out,total:tot||(inp+out),task});
+    });
+  }
+  // newest first
+  ledgerEntries.sort((a,b)=>b.ts.localeCompare(a.ts));
 }
 
 /* ============================ STATE + GRAPH ============================ */
@@ -1039,6 +1101,66 @@ function copyProposed(){
 }
 function clearProposed(){proposed=[];renderConstants();}
 
+/* ============================ LEDGER TAB ============================ */
+function renderLedger(){
+  const el=document.getElementById("ledger-view");
+  if(!ledgerEntries.length){
+    el.innerHTML='<div style="max-width:700px"><h2 style="margin:0 0 8px">Token Ledger</h2><p style="color:var(--muted)">No <code>docs/token-ledger.md</code> found in this project.<br>The AI appends one row here at the end of each session — timestamp, model, token counts, and a one-line task summary.</p></div>';
+    return;
+  }
+  const filtered=ledgerEntries.filter(e=>{
+    if(ledgerFrom&&e.date<ledgerFrom) return false;
+    if(ledgerTo&&e.date>ledgerTo) return false;
+    return true;
+  });
+  const sumIn=filtered.reduce((a,e)=>a+e.input,0);
+  const sumOut=filtered.reduce((a,e)=>a+e.output,0);
+  const sumTot=filtered.reduce((a,e)=>a+e.total,0);
+  const fmt=n=>n.toLocaleString();
+  let h='<div style="max-width:980px">';
+  h+='<h2 style="margin:0 0 6px">Token Ledger</h2>';
+  h+='<p style="color:var(--muted);font-size:13px;margin:0 0 16px">AI compute usage per session — model, token counts, and task. The AI appends a row here at the end of every session.</p>';
+  // Date filters
+  h+='<div class="ledger-filters">';
+  h+='<label>From <input type="date" id="ledger-from" value="'+ledgerFrom+'" onchange="ledgerFrom=this.value;renderLedger()"></label>';
+  h+='<label>To <input type="date" id="ledger-to" value="'+ledgerTo+'" onchange="ledgerTo=this.value;renderLedger()"></label>';
+  if(ledgerFrom||ledgerTo) h+='<button class="btn" onclick="ledgerFrom=\'\';ledgerTo=\'\';renderLedger()">Clear filter</button>';
+  h+='<span style="color:var(--muted);font-size:12.5px">'+filtered.length+' of '+ledgerEntries.length+' session'+(ledgerEntries.length!==1?'s':'')+'</span>';
+  h+='</div>';
+  // Summary cards
+  h+='<div class="stat-cards">';
+  h+='<div class="stat-card"><div class="st-label">Sessions</div><div class="st-value">'+filtered.length+'</div></div>';
+  h+='<div class="stat-card"><div class="st-label">Total tokens</div><div class="st-value">'+fmt(sumTot)+'</div></div>';
+  h+='<div class="stat-card"><div class="st-label">Input tokens</div><div class="st-value">'+fmt(sumIn)+'</div><div class="st-sub">prompt + context</div></div>';
+  h+='<div class="stat-card"><div class="st-label">Output tokens</div><div class="st-value">'+fmt(sumOut)+'</div><div class="st-sub">generated text</div></div>';
+  h+='</div>';
+  // Table
+  if(!filtered.length){
+    h+='<p style="color:var(--muted)">No sessions match the selected date range.</p>';
+  } else {
+    h+='<table class="ledger-table"><thead><tr><th>Timestamp</th><th>Model</th><th style="text-align:right">Input</th><th style="text-align:right">Output</th><th style="text-align:right">Total</th><th>Task</th></tr></thead><tbody>';
+    filtered.forEach(e=>{
+      h+='<tr>';
+      h+='<td style="white-space:nowrap;color:var(--muted);font-size:12.5px">'+esc(e.ts)+'</td>';
+      h+='<td><span class="ledger-model">'+esc(e.model)+'</span></td>';
+      h+='<td class="ledger-tokens">'+fmt(e.input)+'</td>';
+      h+='<td class="ledger-tokens">'+fmt(e.output)+'</td>';
+      h+='<td class="ledger-tokens" style="color:var(--struct)">'+fmt(e.total)+'</td>';
+      h+='<td style="color:var(--muted);font-size:12.5px;max-width:360px">'+esc(e.task)+'</td>';
+      h+='</tr>';
+    });
+    // Totals row
+    h+='<tr class="totals-row"><td colspan="2">Total &nbsp;<span style="font-weight:400;color:var(--muted)">'+filtered.length+' session'+(filtered.length!==1?'s':'')+'</span></td>';
+    h+='<td class="ledger-tokens">'+fmt(sumIn)+'</td>';
+    h+='<td class="ledger-tokens">'+fmt(sumOut)+'</td>';
+    h+='<td class="ledger-tokens" style="color:var(--struct)">'+fmt(sumTot)+'</td>';
+    h+='<td></td></tr>';
+    h+='</tbody></table>';
+  }
+  h+='</div>';
+  el.innerHTML=h;
+}
+
 /* ============================ TABS / CONTROLS ============================ */
 let tab="map";
 function showTab(t){
@@ -1052,10 +1174,12 @@ function showTab(t){
   document.getElementById("structure").classList.toggle("show",t==="structure");
   document.getElementById("screens").classList.toggle("show",t==="screens");
   document.getElementById("constants-view").classList.toggle("show",t==="constants");
+  document.getElementById("ledger-view").classList.toggle("show",t==="ledger");
   if(t==="structure") renderStructure();
   else if(t==="screens") renderScreens();
   else if(t==="canvas"){cvpX=0;cvpY=0;cvZ=1;renderCanvas();fitCanvas();}
   else if(t==="constants") renderConstants();
+  else if(t==="ledger") renderLedger();
   else drawEdges();
 }
 document.getElementById("tabs").onclick=e=>{ const b=e.target.closest("button"); if(b) showTab(b.dataset.tab); };
@@ -1094,10 +1218,12 @@ function load(files){
   const parsed=parseProject(files);
   buildGraph(parsed);
   parseConstants(files);
-  proposed=[];
+  parseLedger(files);
+  proposed=[]; ledgerFrom=""; ledgerTo="";
   document.getElementById("projname").textContent=parsed.projectName||"Project-OS Viewer";
   const constNote=constantGroups.length?` · ${constantGroups.reduce((a,g)=>a+g.constants.length,0)} constants`:"";
-  document.getElementById("projsub").textContent=(parsed.projectSub||"")+" · "+G.nodes.length+" nodes · "+G.edges.length+" links"+constNote;
+  const ledgerNote=ledgerEntries.length?` · ${ledgerEntries.length} session${ledgerEntries.length!==1?"s":""} logged`:"";
+  document.getElementById("projsub").textContent=(parsed.projectSub||"")+" · "+G.nodes.length+" nodes · "+G.edges.length+" links"+constNote+ledgerNote;
   selectedId=null; blastOn=false; document.getElementById("panel").classList.remove("show");
   buildFilters(); showTab("map"); renderMap();
 }

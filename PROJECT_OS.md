@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.5
+**Status:** Working draft · 0.5.1
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -75,6 +75,7 @@ docs/outcomes.md
 docs/structure.md
 docs/architecture.md
 docs/constants.md
+docs/token-ledger.md
 ```
 
 ### Filled in as the project grows
@@ -174,6 +175,7 @@ Each file below has a **purpose**, a **template**, and **structural rules**. Mai
 - `docs/architecture.md` — the technical map: system context + containers (the most detailed layers)
 - `docs/components/` — components inside each container
 - `docs/constants.md` — the live values catalog: every env var, config constant, token, and physics value — touchable from the viewer
+- `docs/token-ledger.md` — AI compute usage log: one row per session, viewable in the Ledger tab
 - `docs/features/` — feature specs
 - `docs/decisions/` — why the system is shaped this way
 - `docs/screens.md` — screens / scenes / pages inventory
@@ -969,6 +971,41 @@ The live values that control how this project behaves. Touchable from the viewer
 - `Min` / `Max` are optional but make the viewer render a slider — always fill them for numeric values where a sane range exists.
 - Never include secrets (actual API keys, passwords, tokens) in plaintext here. Use a placeholder like `[set in environment]` and mark the type `secret`.
 - The AI syncs this file whenever a config or env file changes. When the viewer proposes a change, the AI reads the proposal from JOURNAL.md and applies it to the Source file.
+
+---
+
+### 3.18 — docs/token-ledger.md
+
+**Purpose:** A session-by-session log of AI compute spend on this project. Every session in which an AI agent performs work under this OS ends with a new row appended here — timestamp, model name, token counts (input, output, total), and a one-line summary of the task. The viewer's **Ledger tab** reads this file and renders it with date-range filtering and cumulative totals, giving any reader an honest accounting of how much compute has been put into this project and what it was spent on.
+
+**A day-one file.** The AI creates it on bootstrap with the header and an empty table, then appends one row per session worked.
+
+~~~markdown
+# Token Ledger
+
+AI compute usage per session. Append a new row at the end of each session.
+
+| Timestamp | Model | Input | Output | Total | Task |
+|-----------|-------|-------|--------|-------|------|
+| YYYY-MM-DD HH:MM UTC | model-name | 0 | 0 | 0 | one-line task description |
+~~~
+
+**Column definitions:**
+
+| Column | Format | Notes |
+|--------|--------|-------|
+| Timestamp | `YYYY-MM-DD HH:MM UTC` | When the session ended |
+| Model | model identifier | e.g. `claude-sonnet-4-5`, `claude-opus-4` |
+| Input | integer | Prompt + context tokens (no commas) |
+| Output | integer | Generated tokens (no commas) |
+| Total | integer | Input + Output |
+| Task | plain text | One-line summary of what was done this session |
+
+**Rules:**
+- **Append only.** Never edit past rows.
+- Token counts come from the model's own usage reporting where available. If unavailable, prefix with `~` to flag as an estimate (e.g. `~18400`).
+- Never include session content in this file — only the metadata row.
+- The viewer filters by the `YYYY-MM-DD` prefix of the Timestamp column and shows cumulative totals for the selected range.
 
 ---
 
