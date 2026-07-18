@@ -6,7 +6,7 @@ The whole thing rests on one principle:
 
 > **The user builds. The AI organizes.**
 
-You write code, design screens, make decisions. The AI watches, infers meaning, and continuously maintains a small set of documents that describe the project across seven layers — from *why it exists* down to *the code* — so that humans and AI agents can build, understand, and maintain it together.
+You write code, design screens, make decisions. The AI watches, infers meaning, and continuously maintains a small set of documents that describe the project across eight layers — from *why it exists* down to *the code* and *the live values it runs on* — so that humans and AI agents can build, understand, and maintain it together.
 
 ---
 
@@ -36,7 +36,7 @@ Once the OS is in place, the agent creates a directory of documents and keeps th
 
 ### `docs/` — the project map
 
-The map has seven layers. The first three are *intent* (the why and the what); the last four are *technical* (how it's actually built) and are the most detailed.
+The map has eight layers. The first three are *intent* (the why and the what); the next four are *technical* (how it's actually built) and are the most detailed; the last is *live values* (the actual numbers the project runs on, editable from the viewer).
 
 | Document | Layer | Purpose |
 |---|---|---|
@@ -45,11 +45,13 @@ The map has seven layers. The first three are *intent* (the why and the what); t
 | `docs/flows.md` | L2 | End-to-end timelines: what happens, in order, and who triggers what. |
 | `docs/architecture.md` | L3–L4 | System context and containers — how the system is actually built and runs. |
 | `docs/components/` | L5 | The components inside each container, with their key files and call graph. |
+| `docs/constants.md` | L7 | The live values catalog — env vars, config, tokens, physics — touchable from the viewer. |
 | `docs/data-model.md` | — | Core entities, their fields, and where each lives. |
 | `docs/features/` | — | One file per feature: the problem, the scope, and what "done" means. |
 | `docs/decisions/` | — | Architecture decision records — *why* the system is shaped the way it is. |
 | `docs/screens.md` (+ `docs/screens/`) | — | Every screen / scene / page, plus QA screenshots over time. |
 | `docs/permissions.md`, `docs/integrations.md`, `docs/telemetry.md` | — | External surface and how outcomes are measured. |
+| `docs/token-ledger.md` | — | AI compute log — one row per session, rendered in the viewer's Ledger tab. |
 | `docs/structure.md` | — | A map of every folder in the repo: what it is, who owns it, whether it's current or stale. |
 | `docs/diagrams/` | — | Rendered diagrams of the layers (generated, not hand-written). |
 | `docs/viewer/index.html` | — | The interactive viewer (see below). |
@@ -60,7 +62,7 @@ Nothing here is ever silently deleted: when a feature is dropped or a decision r
 
 ## The viewer
 
-A single self-contained HTML file that renders the seven-layer map as a navigable graph — no build step, no server, no dependencies. It shows the technical layers in full detail by default, hides retired items behind a **History** view, and lets you drill from a container down to a component down to a line of code.
+A single self-contained HTML file that renders the eight-layer map as a navigable graph — no build step, no server, no dependencies. It shows the technical layers in full detail by default, hides retired items behind a **History** view, and lets you drill from a container down to a component down to a line of code — then edit live constants (L7) and check the project's AI compute spend, all from the same file.
 
 A working reference implementation ships in [`viewer/`](viewer/) — open `viewer/index.html` to see it with a built-in demo project, or point it at your own `docs/` folder. See [`viewer/README.md`](viewer/README.md).
 
@@ -76,4 +78,4 @@ The agent also checks this repository for newer versions at the start of a sessi
 
 ---
 
-**Status:** working draft `v0.4.1`. This repository is the specification plus a reference viewer.
+**Status:** working draft `v0.5.1`. This repository is the specification plus a reference viewer.

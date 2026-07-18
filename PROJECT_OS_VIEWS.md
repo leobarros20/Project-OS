@@ -1,6 +1,6 @@
 # PROJECT_OS_VIEWS.md
 
-**Status:** Working draft · 0.5
+**Status:** Working draft · 0.5.1
 **Purpose:** How to render the project map as static diagrams and the interactive viewer. This file is the rendering contract that complements the artifact contract in `PROJECT_OS.md` and the runtime contract in `PROJECT_OS_BEHAVIOR.md`.
 
 **Audience:** AI coding agents producing diagrams or building the viewer; humans reviewing what gets rendered.
@@ -356,7 +356,7 @@ The trade-off is parser fragility — if the AI writes `### Outcome 1` one day a
 
 ### 8.1 — What the viewer does
 
-**Core capabilities (v0.5 must have all of these):**
+**Core capabilities (v0.5.1 must have all of these):**
 
 1. **Renders the eight-layer map as a navigable graph** — Layer 0 at the top, Layer 6 at the bottom, with cross-cutting threads (features, decisions, telemetry, values) shown as overlays.
 2. **Project structure view** — a dedicated panel rendering `docs/structure.md` as a navigable tree. Each folder shows status (Current / Reference / Legacy / Generated / Build artifact), purpose, owner, and touch policy. Orphans and archive candidates are flagged visually. This is the orientation surface for anyone arriving fresh.
@@ -371,6 +371,7 @@ The trade-off is parser fragility — if the AI writes `### Outcome 1` one day a
 11. **Deepest drill-down on the technical layers.** Clicking a container expands its components; clicking a component expands its code-level view with `file:line` deep links. The technical layers (L3–L6) are the most detailed part of the viewer and are reachable by drilling, not buried.
 12. **Constants tab — editable live values (L7).** A dedicated surface showing every constant from `docs/constants.md` as an editable, type-aware input: sliders for numbers, color pickers for hex values, toggles for booleans. Secrets are masked. Changes queue as proposals; a "Copy to AI" button formats them as a JOURNAL-ready block.
 13. **Canvas tab — IcePanel-style spatial view.** A pannable, zoomable canvas with swimlanes per layer, nodes as cards positioned spatially, and bezier-curve edges between related nodes. This is a spatial alternative to the band-based Map view — the same data, different navigation style.
+14. **Ledger tab — AI compute accounting.** A dedicated surface reading `docs/token-ledger.md`: stat cards (sessions, input, output, total tokens), a date-range filter (From / To, matched against the `YYYY-MM-DD` prefix of each row's timestamp), and the session table with a cumulative totals row for the selected range. Read-only — the AI appends the rows (`PROJECT_OS_BEHAVIOR.md`, end-of-session cadence); the viewer only renders them.
 
 **View depth — technical layers are shown by default:**
 
@@ -389,6 +390,8 @@ The viewer is a pure read tool. It reads the live `docs/` tree on load:
 - `docs/architecture.md` — Layers 3–4 content (system context, containers)
 - `docs/components/*.md` — Layer 5 content (components per container)
 - `docs/structure.md` — filesystem inventory; powers the Structure view
+- `docs/constants.md` — Layer 7 content; powers the Constants tab
+- `docs/token-ledger.md` — session compute log; powers the Ledger tab
 - `docs/features/*.md` — feature overlay
 - `docs/decisions/*.md` — decision overlay
 - `docs/screens.md` — screens metadata
@@ -426,7 +429,7 @@ When the viewer loads, the user sees:
 │  [Project summary one-liner]                                    │
 ├─────────────────────────────────────────────────────────────────┤
 │  [ Map ] [ Canvas ] [ Structure ] [ Screens ] [ Constants ]     │
-│                                  Search ▢   Filter ▼           │
+│  [ Ledger ]                      Search ▢   Filter ▼           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │      L0 — Outcomes (4 active)                                   │
@@ -448,11 +451,14 @@ Two header controls sit above every surface:
 - **Current / History** — `Current` (default) shows only active nodes, so the map always reflects the project as it stands today. `History` adds the retired nodes (deprecated, superseded, abandoned, removed) muted, with `superseded by` edges to their replacements — the "older versions" view.
 - **Simplify** — off by default. When on, it collapses the map to the intent layers (L0–L2) for non-technical readers. Off (the default), all seven layers show, with the technical layers expanded and drillable.
 
-The top tab strip switches between the primary surfaces (both header controls apply to all three):
+The top tab strip switches between the primary surfaces (both header controls apply to all of them):
 
 - **Map** (default) — the seven-layer graph described above, technical layers shown by default
+- **Canvas** — the IcePanel-style spatial view (capability 13): same graph, swimlanes and pan/zoom instead of bands
 - **Structure** — `docs/structure.md` rendered as an interactive tree of the project's folders, with status badges, owner tags, and touch-policy notes. Clicking a folder reveals its purpose and what relates to it in the Map view.
 - **Screens** — `docs/screens.md` rendered as a gallery of the latest QA captures, with filters by context and flow.
+- **Constants** — the editable L7 surface (capability 12): type-aware inputs, proposal queue, Copy to AI
+- **Ledger** — the compute accounting surface (capability 14): stat cards, date-range filter, session table with totals
 
 Clicking a node (on any surface) opens a side panel with:
 
@@ -481,7 +487,7 @@ The viewer must support:
 
 Pan and zoom on the graph itself are mandatory. The `all-layers.html` example produced for Linger is a reasonable reference.
 
-### 8.7 — Future directions (not in v0.5)
+### 8.7 — Future directions (not in v0.5.1)
 
 These are explicitly out of scope for the current viewer but worth keeping in mind:
 
@@ -538,7 +544,11 @@ And if a non-programmer wanting to change behavior can:
 10. Open the **Constants** tab, find a numeric value (e.g. animation duration), move the slider, see the old and new values side by side, and copy the proposal in one click without touching any code or file.
 11. Open the **Canvas** tab and navigate the same project spatially — pan to a container, see its edges to other containers, click a node to open its detail panel.
 
-If a non-coder fails 1–6, a builder fails 7–9, or a non-programmer fails 10–11, the viewer needs work.
+And if anyone accounting for cost can:
+
+12. Open the **Ledger** tab and answer "how much AI compute has gone into this project, and on what?" — filter to a date range and read the session rows and the cumulative totals for that range, without opening any file.
+
+If a non-coder fails 1–6, a builder fails 7–9, a non-programmer fails 10–11, or anyone fails 12, the viewer needs work.
 
 ---
 
