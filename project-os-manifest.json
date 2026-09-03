@@ -1,0 +1,43 @@
+{
+  "_comment": "Freshness manifest (PROJECT_OS.md Part 2). Every artifact the spec declares must appear here with a class, or scripts/freshness.mjs goes red. class: CALENDAR (limitDays) | DEBT (ticket + due) | DESCRIPTIVE (why) | GENERATED (emitter).",
+  "referenceBranch": "main",
+  "artifacts": [
+    { "path": "README.md", "class": "DESCRIPTIVE", "why": "Public entry point; changes when the artifact set or the adoption story does." },
+    { "path": "CHANGELOG.md", "class": "CALENDAR", "limitDays": 120, "note": "The upgrade path is the product. A version shipped without an entry here is the 0.5/0.5.1 failure repeating." },
+    { "path": "PROJECT_OS.md", "class": "DESCRIPTIVE", "why": "The artifact contract; changes only when the contract does. Lockstep with its two companions is checked separately." },
+    { "path": "PROJECT_OS_BEHAVIOR.md", "class": "DESCRIPTIVE", "why": "The runtime contract; changes only when behavior does." },
+    { "path": "PROJECT_OS_VIEWS.md", "class": "DESCRIPTIVE", "why": "The rendering contract; changes only when rendering does." },
+    { "path": "viewer/index.html", "class": "DESCRIPTIVE", "why": "Reference implementation; changes when a spec'd viewer capability changes." },
+    { "path": "viewer/README.md", "class": "DESCRIPTIVE", "why": "Describes the shipped viewer; changes with it." },
+    { "path": "docs/project-os-status.md", "class": "GENERATED", "emitter": "scripts/freshness.mjs" },
+
+    { "path": "PROJECT_SUMMARY.md", "class": "DEBT", "ticket": "self-host-1", "due": "2026-10-15", "why": "This repo has never dogfooded the full artifact set: it is a spec repo that ships no PROJECT_SUMMARY. Either write one or record the exemption as a decision." },
+    { "path": "JOURNAL.md", "class": "DEBT", "ticket": "self-host-1", "due": "2026-10-15", "why": "Same gap: session history for this repo lives only in chat transcripts, which is the exact failure BEHAVIOR Part 0 forbids." },
+    { "path": "docs/outcomes.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Day-one artifact the spec demands of every adopter and this repo does not have. Blocked on deciding whether a spec repo is a project under its own OS or an exempt tool." },
+    { "path": "docs/structure.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Same decision as docs/outcomes.md." },
+    { "path": "docs/architecture.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Same decision as docs/outcomes.md." },
+    { "path": "docs/constants.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Same decision as docs/outcomes.md." },
+    { "path": "docs/contexts.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Grows-with-the-project artifact; blocked on the same self-host decision." },
+    { "path": "docs/flows.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Grows-with-the-project artifact; blocked on the same self-host decision." },
+    { "path": "docs/screens.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Grows-with-the-project artifact; the viewer is this repo's only surface." },
+    { "path": "docs/data-model.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Grows-with-the-project artifact; blocked on the same self-host decision." },
+    { "path": "docs/permissions.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Grows-with-the-project artifact; a spec repo has no runtime permissions, so this may resolve as a recorded exemption." },
+    { "path": "docs/integrations.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Grows-with-the-project artifact; blocked on the same self-host decision." },
+    { "path": "docs/telemetry.md", "class": "DEBT", "ticket": "self-host-2", "due": "2026-11-15", "why": "Grows-with-the-project artifact; likely a recorded exemption for a spec repo with no runtime." },
+
+    { "path": "docs/diagrams/master-map.md", "class": "DEBT", "ticket": "self-host-3", "due": "2026-11-15", "why": "GENERATED with no emitter wired in this repo — per Part 2, an un-wired emitter carries its artifact as DEBT rather than a silent lapse." },
+    { "path": "docs/diagrams/outcomes-view.md", "class": "DEBT", "ticket": "self-host-3", "due": "2026-11-15", "why": "Generated view, no emitter wired here." },
+    { "path": "docs/diagrams/contexts-view.md", "class": "DEBT", "ticket": "self-host-3", "due": "2026-11-15", "why": "Generated view, no emitter wired here." },
+    { "path": "docs/diagrams/c4-context.md", "class": "DEBT", "ticket": "self-host-3", "due": "2026-11-15", "why": "Generated view, no emitter wired here." },
+    { "path": "docs/diagrams/c4-containers.md", "class": "DEBT", "ticket": "self-host-3", "due": "2026-11-15", "why": "Generated view, no emitter wired here." },
+    { "path": "docs/viewer/index.html", "class": "DEBT", "ticket": "self-host-3", "due": "2026-11-15", "why": "The spec puts the viewer at docs/viewer/; this repo ships the reference at viewer/ instead. Either vendor it into docs/viewer/ or record the spec-repo exemption." }
+  ],
+  "exempt": [
+    { "path": "PROJECT_OS.md", "reason": "listed in Part 2 as the contract itself, classified above" },
+    { "path": "PROJECT_OS_BEHAVIOR.md", "reason": "classified above" },
+    { "path": "PROJECT_OS_VIEWS.md", "reason": "classified above" },
+    { "path": "docs/token-ledger.md", "reason": "optional as of 0.6 (3.18); not adopted by this repo" },
+    { "path": "docs/conventions.md", "reason": "optional (3.20); not adopted by this repo" },
+    { "path": "docs/ORCHESTRATOR.md", "reason": "team tier only (Part 7); this repo is solo tier" }
+  ]
+}
