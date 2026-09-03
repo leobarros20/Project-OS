@@ -51,7 +51,8 @@ The map has eight layers. The first three are *intent* (the why and the what); t
 | `docs/decisions/` | — | Architecture decision records — *why* the system is shaped the way it is. |
 | `docs/screens.md` (+ `docs/screens/`) | — | Every screen / scene / page, plus QA screenshots over time. |
 | `docs/permissions.md`, `docs/integrations.md`, `docs/telemetry.md` | — | External surface and how outcomes are measured. |
-| `docs/token-ledger.md` | — | AI compute log — one row per session, rendered in the viewer's Ledger tab. |
+| `docs/token-ledger.md` | — | AI compute log (optional) — one row per session, rendered in the viewer's Ledger tab. |
+| `docs/project-os-status.md` | — | Generated freshness report — the protocol's own state, emitted by the check that enforces it. |
 | `docs/structure.md` | — | A map of every folder in the repo: what it is, who owns it, whether it's current or stale. |
 | `docs/diagrams/` | — | Rendered diagrams of the layers (generated, not hand-written). |
 | `docs/viewer/index.html` | — | The interactive viewer (see below). |
@@ -78,4 +79,4 @@ The agent also checks this repository for newer versions at the start of a sessi
 
 ---
 
-**Status:** working draft `v0.5.1`. This repository is the specification plus a reference viewer.
+**Status:** working draft `v0.6`. This repository is the specification plus a reference viewer.

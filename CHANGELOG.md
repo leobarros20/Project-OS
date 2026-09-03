@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.5.1
+**Current version:** 0.6
 
 This file does two jobs:
 
@@ -19,6 +19,56 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.6 — 2026-09-03
+
+### What changed
+
+0.6 promotes patterns proven in real multi-product, multi-agent use into canon. The headline: **the protocol is now a process that reports its own state, not a memory test** — and the OS scales by tier instead of assuming one shape.
+
+- **The session protocol is an invocable process** (`BEHAVIOR.md` Part 1, rewritten). Measured in the field, a 15-file reading list plus ~10 carried triggers produced lapses that only the human ever caught. Three mandatory mechanisms replace memory: a **freshness check** wired into the project's own build/test system; a **generated status file** `docs/project-os-status.md` (§3.21) that agents read instead of deriving state; and a **`project-os` skill** (open/close phases — reference template ships in Part 1) that, where the platform supports it, **injects itself** at session start rather than waiting to be remembered (measured: 4 of 10 sessions on one product delivered work having never opened it, while its closing gate was healthy). Three traps are part of the contract: checker inputs declared as a set (a file-by-file input list lets a stale result serve a cached green); an explicit "what this check cannot verify" statement; and an injector with no status artifact to inject, which exits silently — installation counts only after an observed injection with a deliberately reddened row. When a gate goes red, write the missing artifact — never narrow the check. Considered and declined (2026-07-29): deleting reader-less artifacts; keep the structure, add process.
+- **The freshness rule** (`PROJECT_OS.md` Part 2): every artifact is explicitly classified **CALENDAR** (cadence; silence fails) / **DEBT** (ticketed, with an expiry — past it, red regardless) / **DESCRIPTIVE** (trust reason recorded), and an unclassified artifact is itself a red. Generated artifacts are build outputs; an un-wired emitter carries its artifact as DEBT. A default classification table ships in Part 2.
+- **Teams module** (`BEHAVIOR.md` Part 7 — new; the old Part 7 closer is now Part 8). One lead owns all git writes; workers never touch git. The standard handoff is the **uncommitted handoff** (work stays uncommitted in the shared tree or a worktree; the queue is `ready-for-review` issues with a standard body; the lead re-verifies, integrates, commits path-scoped, closes with "merged in <sha>", and bounces substantive handoffs lacking their docs artifacts). A committed-worker-branches variant is documented, gated on an explicit hook carve-out plus a superseding ADR. Enforcement: fail-closed `pre-commit`/`pre-push`/`pre-merge-commit` hooks keyed to an **out-of-repo owner token** (absence blocks everyone — fail closed, never open); automation commits under the lead's credential. Commit numbering `NN - description`, next = highest + 1 (never a count), enforced by a `commit-msg` guard. The board `docs/ORCHESTRATOR.md` (§3.19) carries standing directives, team charters, and append-only broadcasts — and is explicitly not the queue.
+- **Tier profiles** (`PROJECT_OS.md` Part 7 — new; the old Part 7 closer is now Part 8): **solo / team / multi-team** decide which OS pieces activate. The solo tier may run the **externalized profile** — wiki + project board as the OS, repo keeping README, an overview, and deviation ADRs — recognized formally, declared in the README, with tier moves recorded as ADRs.
+- **`BEHAVIOR.md` Part 0 gains the distillation corollary:** the active chat is raw project memory that must be distilled into the artifacts; nothing important stays trapped in a conversation.
+- **Bootstrap gains a lifecycle** (`BEHAVIOR.md` Part 5): optional disposable `KICKOFF.md` (step 0) deleted at bootstrap's end with a "preserved in history at commit NN" pointer in both the deletion commit and the journal (step 19); tier declaration (step 4); freshness-check wiring with a non-vacuity test (step 16a); teams-module standing-up at team tier (step 16b).
+- **`docs/token-ledger.md` is demoted from day-one to optional** (§3.18): field evidence shows a ledger survives only as a committing-layer session-end ritual; if adopted it is classified CALENDAR(session-end), appended only by the thread that commits, with automated append as a sanctioned upgrade. The viewer's Ledger tab already handles absence.
+- **New optional artifact `docs/conventions.md`** (§3.20): a separately versioned working agreement (Status/Binds/Authority header, required sections, revision history) for the repo-local rules that belong neither in the OS trio nor in user-global config.
+
+Reference implementations exist as neutral patterns: a Gradle-based product wires the freshness check as a unit test that emits the status file; a Node-based product wires it into a deterministic post-commit status generator (fail-open, degrade-gracefully). Map the mechanism to the project's own build system — the buckets, the emitted status file, and the skill are the contract; the tooling is free.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite `PROJECT_OS.md`, `PROJECT_OS_BEHAVIOR.md`, `PROJECT_OS_VIEWS.md` with the 0.6 versions.
+2. **Declare the tier** (`PROJECT_OS.md` Part 7): add a `Tier: solo | team | multi-team` line to the `PROJECT_SUMMARY.md` header (externalized solo: the note goes in `README.md` instead, naming the external systems). If the tier is not already recorded anywhere, infer it from how the repo is actually worked, mark the inference, and queue a Mode 3 confirmation.
+3. **Classify every artifact** per the freshness rule (Part 2): CALENDAR / DEBT / DESCRIPTIVE, in a manifest the check reads. DEBT requires a ticket and an expiry date. Anything already stale enters as DEBT honestly — not as a silent CALENDAR violation.
+4. **Wire the freshness check** into the project's own test or build system, emitting `docs/project-os-status.md` (§3.21) with its mandatory "What a test cannot see" section. Verify it is not vacuous: delete one manifest entry and confirm red; age a doc and confirm red without a forced rerun. If the check cannot be wired this session, create it as a ticketed DEBT item with an expiry — do not skip silently.
+5. **Create the `project-os` skill** from the `BEHAVIOR.md` Part 1 template (open/close phases) and point the repo's agent-config file at it. Where the agent platform supports session-start hooks, install the injector too — then confirm it is live by reddening one row deliberately and observing the injection in a fresh session; an injector with nothing to inject fails silently.
+6. **Token ledger decision** (§3.18): if `docs/token-ledger.md` exists and is current, keep it — classify CALENDAR(session-end, committing layer). If it exists and is stale, either revive it (classify + one catch-up row noting the gap) or retire it honestly via the Part 6 cleanup flow with a tombstone note. If absent, no action — it is optional now.
+7. **If the tier is team or multi-team**, stand up the teams module (`BEHAVIOR.md` Part 7) where missing: `docs/ORCHESTRATOR.md` from the §3.19 template; handoff / handoffs / broadcast skills; fail-closed single-committer hooks + out-of-repo owner token (or record the policy-only downgrade and its threat model in an ADR); the `commit-msg` numbering guard. Record single-committer as an ADR if not already recorded. A project already running a variant maps it onto Part 7 and records any deviation (e.g. committed worker branches need the hook carve-out + superseding ADR).
+8. **Optionally adopt `docs/conventions.md`** (§3.20): if repo-local working agreements are scattered across boards, chats, or commit messages, graduate them into a v1.0 manifesto.
+9. Add a `JOURNAL.md` entry noting the upgrade to 0.6 and what was created or changed. (The KICKOFF lifecycle is bootstrap-only — no migration action.)
+
+---
+
+## Parked — candidates for future versions
+
+Mechanisms observed in the field but not yet canon. Each is verified at its source before being folded; none is binding.
+
+- Optional UX-foundation-artifacts module: per-persona empathy/journey maps + service blueprint with an inferred→validated lifecycle.
+- Territory-split committer model (a second committer bounded by path territory, as an alternative to strict single-committer).
+- Verify-at-source: another agent's reported result is a claim; the open phase and handoff intake re-verify against the artifact.
+- Clean-worktree escape hatch: when a shared tree is broken by another lane, verify your change in a clean worktree at HEAD — never sweep in or revert the other lane's work.
+- Ignore-hygiene as a correctness property: a protocol that reads `git status` degrades as that surface gets noisy.
+- Releases build from a clean checkout, never a developer machine.
+- The inherited-standard version stamp becomes a gated artifact (a stale "which version of the shared standard do I follow" is otherwise invisible).
+- Classify generated artifacts by their **generator's** cadence, so a dead scheduler goes red even while its output looks fine.
+- Threshold immutability under failure; sabotage-verified testing; ratchet gates for incremental migrations; an adversarial close phase.
+- Environment-blocked obligations entering the DEBT bucket; a self-injecting cross-machine inbox; per-stream legal basis for data streams; agent-readable design-system manifests.
+- **CI as a budget, not a utility:** expensive paths dispatch-only, local verification as the daily loop, batched pushes, and the accepted tradeoff written in the workflow beside its compensating control — with the measurement trap that a timing endpoint reporting zero billable hides the real cost (per-job duration × class multiplier).
+- **The supervisor's observation tool is a distinct mechanism from the session protocol**, and one does not substitute for the other: a read-only cross-team snapshot (sessions + review queue + git + board, no actuation) is safe unconfirmed *because reading cannot mutate another agent's work*, while the steering half stays human-gated. A product can carry the observing half and still have no session protocol at all.
 
 ---
 

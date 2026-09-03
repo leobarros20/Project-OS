@@ -1,7 +1,7 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.5.1
-**Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, and bootstrapping. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
+**Status:** Working draft · 0.6
+**Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, bootstrapping, and team orchestration. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
 
@@ -17,13 +17,90 @@ The user makes things — writes code, designs screens, has ideas, makes request
 
 The user's only responsibility is to **answer when the AI surfaces a clarifying question**. Everything else is the AI's job.
 
+And one corollary the whole artifact set depends on: **the active chat is raw project memory.** Treat every conversation as raw material that must be distilled into `JOURNAL.md`, `PROJECT_SUMMARY.md`, and the relevant `docs/` artifacts. Do not leave important decisions or context trapped only in the conversation — a decision that lives only in a chat, or only in a commit message, is a decision nobody will find.
+
 ---
 
 ## Part 1 — Session protocol
 
+### The protocol is a process, not a memory test
+
+Earlier versions of this part were a fifteen-file reading list plus roughly ten conditional update triggers carried in the agent's head for the whole session. Measured in the field, that design fails: on one real product it produced three lapses in three weeks (a journal 33 commits and 18 days behind; a summary 141 commits and 52 days behind), every one found by the user and none by the system. More policy did not fix it — the rule was already policy when the lapses happened. Per-file tripwires did not fix it — the rot moved to whichever file the check did not watch. The diagnosis: **the check was always narrower than the diagnosis behind it, and the protocol had no way to report its own state.**
+
+What never rotted, anywhere: the artifact a check rewrites on every run. So as of 0.6 the protocol is a *process* with three mandatory mechanisms:
+
+1. **The freshness check.** A check wired into the project's own build or test system enumerates the artifact set from this spec, requires every artifact to carry its freshness classification (`PROJECT_OS.md` Part 2), and goes red when a CALENDAR artifact lapses, a DEBT artifact passes its expiry, or *any* artifact is unclassified — the check detects its own incompleteness. Adding an artifact without deciding how it stays fresh becomes a red build.
+2. **The generated status file.** The same check **emits** `docs/project-os-status.md` (`PROJECT_OS.md` 3.21). Agents read state there — one file, always current — and never derive it by comparing file dates.
+3. **The invocable skill — that injects itself.** The protocol ships as a `project-os` skill with an **open** phase and a **close** phase, discoverable automatically by every agent on the repo. But a protocol that must be *remembered* is a protocol that lapses: measured on one product, 4 of 10 sessions delivered work having never opened the skill, while its closing gate was healthy — the two halves were failing differently, and only measurement showed which. So where the agent platform supports it, a **session-start hook injects the generated status file and the closing obligations into every session automatically**, hoisting anything LAPSED / MISSING / PAST DUE. The skill remains the full protocol; the hook only guarantees nobody starts blind. Where no hook mechanism exists, the repo's agent-config file points at the skill as the first instruction — weaker, and known to be weaker.
+
+**Three traps, part of the contract:**
+
+- **Declare the checker's inputs as a set, not file by file.** File-by-file inputs let a stale result serve a cached green — the same narrowness one layer down, in the thing built to stop narrowness. Verify by aging a doc and confirming red *without* a forced rerun.
+- **State what the check cannot verify.** These gates verify that a dated heading exists, never that it says anything true; a stricter check would only raise the incentive to satisfy its letter. Each project's check and its status file carry an explicit "what this check cannot see" statement.
+- **An injector with nothing to inject fails silently.** A session-start hook whose status artifact is missing exits quietly and injects nothing — the install looks done and does nothing. Installation is complete only when an **observed injection** has been confirmed in a real session, with a deliberately reddened row proving the content is live.
+
+Two more rules keep the mechanism honest:
+
+- **When a freshness check goes red, write the missing artifact.** Do not raise a threshold, do not move an entry to DESCRIPTIVE, do not extend a debt expiry without the user re-scoping the ticket. Narrowing the check is the exact failure this design exists to stop, and it is cheap to spot in a diff.
+- **Verify the check is not vacuous, once, at setup:** delete one entry from the manifest and confirm red.
+
+Deliberately *not* part of the design: deleting artifacts that have no current reader. That is the obvious efficiency, and it was considered and declined (2026-07-29) — keep the structure, put a process in place instead. Recorded here so the next adopter does not re-propose it.
+
+### The `project-os` skill (reference template)
+
+Ship this as a skill; adapt the bracketed parts to the project. The reading list it references is the one below.
+
+~~~markdown
+---
+name: project-os
+description: Open and close a session under the Project-OS protocol. Run it at
+  the start of a working turn to see what the protocol is owed, and again before
+  finishing to discharge it. Any agent on this repo, not just the lead.
+---
+
+## Phase 1 — Opening a session
+
+1. **Read the state. One file, always current:** `docs/project-os-status.md`.
+   It is generated by [the freshness check]; if it looks old, run the check —
+   do not edit it. Anything LAPSED / MISSING / PAST DUE is work you owe before
+   you finish. Say so in your first message rather than discovering it at
+   commit time.
+2. **Is the default branch green?** [CI status command]. Red means stop and
+   diagnose before building on top.
+3. **Is the tree yours?** `git status --short`. Uncommitted work you did not
+   write is either a handoff to drain or someone's in-flight edit. Never sweep
+   either into your commit (see Part 7 at team tier).
+4. **Then the scoped reading list** — `PROJECT_OS_BEHAVIOR.md` Part 1, scoped
+   to your task. Do not skip the top entry of `JOURNAL.md`: it is where the
+   previous session left its unfinished business.
+
+## Phase 2 — Closing a session
+
+Each item is a gate, not a suggestion. Anything you skip, say you skipped and why.
+
+1. **Same-change artifacts** (they travel with the code, per the cadence in
+   Part 1): architecture/components/screens/data-model/constants updates, an
+   ADR for any meaningful decision, [project-specific same-change gates].
+2. **Deliberate-step artifacts** (they rot, which is why they are gated):
+   `JOURNAL.md` entry — record what you did AND what you could not verify;
+   `PROJECT_SUMMARY.md` when the status file says it is due; [others per the
+   status file].
+3. **Verify** — run [the project's test/build command]; the suite includes the
+   freshness gates, so a lapse you did not fix surfaces here. If a gate goes
+   red, write the missing artifact — never narrow the check.
+4. **Commit** per the project's conventions (at team tier: only the lead
+   commits — workers stop and run /handoff instead).
+5. **Confirm it landed green** before calling the session done.
+
+## What this process cannot do
+
+[The project's honest ceiling — at minimum: the gates verify dated headings
+exist, not that they say anything true; name anything the check cannot reach.]
+~~~
+
 ### At the start of every session
 
-Read, in this order:
+The skill's open phase runs first (status file → CI → tree → then this list). Read, in this order, scoped to the task:
 
 1. `PROJECT_OS.md` (artifact contract) — full
 2. `PROJECT_OS_BEHAVIOR.md` (this file) — full
@@ -35,7 +112,7 @@ Read, in this order:
 8. `docs/architecture.md` — full. The technical map: system context (L3) and containers (L4). Read before touching code so you know the runtime shape you're changing.
 9. `docs/components/` — titles of all; full reading of the file for any container whose internals the task touches (L5).
 9a. `docs/constants.md` — scan for any group whose source file is touched by this task. If the viewer has queued a proposed change (found in JOURNAL.md under "Proposed constants changes"), apply it before anything else and mark it applied.
-9b. `docs/token-ledger.md` — glance at the cumulative totals (awareness only; no action needed at session start).
+9b. `docs/token-ledger.md` — if the project has adopted it (optional as of 0.6), glance at the cumulative totals (awareness only; no action needed at session start).
 10. `docs/flows.md` — only if the task touches user-facing behaviour or sequencing
 11. `docs/decisions/` — titles only, then full reading of any decision relevant to the task
 12. `docs/features/` — only the features relevant to the task
@@ -67,7 +144,7 @@ The AI updates artifacts continuously, in the background. It does NOT pause to a
 - **When the user implies a value or constraint:** ask one short Mode 2 clarification (see Part 2), then tag the captured value onto the affected outcome or context.
 - **Every couple of hours of active work:** append a checkpoint entry to `JOURNAL.md`.
 - **After major changes:** append a new revision to `PROJECT_SUMMARY.md` and/or `README.md` if framing or architecture shifted meaningfully.
-- **At the end of every session:** write a session-summary journal entry; **append a row to `docs/token-ledger.md`** with the timestamp (UTC), model identifier, input token count, output token count, total, and a one-line task summary; propose screen captures for UI-touched screens (per Part 7 of `VIEWS.md`); verify `PROJECT_SUMMARY.md` still matches reality; regenerate any stale diagrams.
+- **At the end of every session:** run the `project-os` skill's close phase. It discharges: the session-summary journal entry; a row appended to `docs/token-ledger.md` if the project has adopted it (committing layer only — at team tier the lead appends, workers never do); screen-capture proposals for UI-touched screens (per Part 7 of `VIEWS.md`); the `PROJECT_SUMMARY.md` reality check; regeneration of stale generated artifacts; and the freshness gates themselves — a lapse the session did not fix goes red here, not in the next audit.
 - **Keep the technical layers the most detailed.** Because L3–L6 are the most detailed layers of the map (`PROJECT_OS.md` Part 4.0.1), hold `docs/architecture.md` and `docs/components/` in lockstep with the code on every structural change. They must never drift into being thinner or staler than the intent layers; when in doubt, deepen them.
 
 ### What the AI must surface (and pause on) before committing
@@ -201,10 +278,11 @@ The major narrative files (`README.md`, `PROJECT_SUMMARY.md`) are append-only. W
 
 If starting from an existing project that does NOT follow this OS:
 
+0. **Optional: start from a kickoff brief.** A new project may begin as a disposable `KICKOFF.md` — a self-contained handoff brief (mission, current state, what's left and who owns it, why the choices were made, gotchas, how to run it) whose own header states it can be deleted once the project is bootstrapped. The brief is raw material: bootstrap distills it into the artifacts below, pre-seeding `PROJECT_SUMMARY.md`, `docs/outcomes.md`, and the tier declaration. It is deleted at the end of bootstrap (step 19), never maintained alongside the artifacts it seeded.
 1. **Place `PROJECT_OS.md`, `PROJECT_OS_BEHAVIOR.md`, and `PROJECT_OS_VIEWS.md`** at the project root.
 2. **Read the existing code, configs, and any existing docs.** Build an initial mental model.
 3. **If chat transcripts are available** (Claude Code sessions, Cursor history, prior exports), set up `.ai-history/` and import them. Optional but helpful.
-4. **Create `PROJECT_SUMMARY.md`** capturing what you found. Mark "unknown" where information is missing.
+4. **Create `PROJECT_SUMMARY.md`** capturing what you found. Mark "unknown" where information is missing. Declare the tier (`PROJECT_OS.md` Part 7) in the header — `Tier: solo | team | multi-team` — inferring from how the repo is actually worked and marking the inference if unconfirmed.
 5. **Create `JOURNAL.md`** with an inaugural entry describing the state on the day the OS was adopted.
 6. **Create `docs/structure.md`** by walking the project tree. For each top-level folder: status, purpose, owner, touch policy. Mark anything you can't classify as an orphan. **Do not move or delete anything** — bootstrap captures what exists, including the mess. Cleanup comes later (see Part 6).
 7. **Commit `docs/outcomes.md`** with best-inference outcomes. Each marked `Inferred`. Mine transcripts for tagged values and constraints if available.
@@ -215,12 +293,15 @@ If starting from an existing project that does NOT follow this OS:
 12. **Commit `docs/architecture.md`** — the system context (L3) and every container (L4) you can identify from the manifest, entry points, and runtime config. This is the most detailed structural artifact; capture runtime type, tech stack, state owned, and how containers talk. Do not stub it thinly.
 13. **Commit `docs/components/NN-*.md`** for every container over the L5 forcing-rule threshold (~500 LOC or ~5 files) — decompose each into components with real file paths, public surface, and call edges.
 13a. **Commit `docs/constants.md`** — walk every config file, `.env.example`, theme file, and physics/constants module and extract values into typed groups. Mark numeric values with min/max where the range is inferable. Do not include actual secrets — use `[set in environment]` as the value for any secret and type `secret`.
-13b. **Commit `docs/token-ledger.md`** — create the file with its header and empty table, then immediately append the first row for this bootstrap session (timestamp: now, model: current model, token counts: best estimate or `~estimate`, task: "bootstrap").
+13b. **If adopting the optional `docs/token-ledger.md`** (a recorded decision — see `PROJECT_OS.md` 3.18): create the file with its header and empty table, then immediately append the first row for this bootstrap session (timestamp: now, model: current model, token counts: best estimate or `~estimate`, task: "bootstrap").
 14. **Identify implicit decisions** in the code. Draft a decision doc for each, status `Proposed`.
 15. **Render the diagrams in `docs/diagrams/`** per `VIEWS.md` — master map first, then per-layer views. Render the technical layers (containers, components, code) to full depth, not just the intent layers; the structural views are the most detailed.
 16. **Scaffold `docs/viewer/index.html`** per the viewer spec in `VIEWS.md`. The viewer is part of the bootstrap, not optional. It must default to the **current** view with technical layers shown (not hidden behind a toggle).
+16a. **Wire the freshness check** (Part 1): classify every artifact per `PROJECT_OS.md` Part 2, wire the check into the project's own test or build system, emit `docs/project-os-status.md`, and verify the check is not vacuous (delete one manifest entry → red; age a doc → red without a forced rerun). Create the `project-os` skill from the Part 1 template and point the repo's agent-config file at it.
+16b. **If the tier is team or multi-team** (Part 7): stand up the teams module — the board (`PROJECT_OS.md` 3.19), the handoff/handoffs/broadcast skills, single-committer enforcement (fail-closed hooks + out-of-repo owner token, or a recorded policy-only downgrade), and the commit-numbering guard. Record single-committer as an ADR.
 17. **Surface inferred content in a single Mode 3 check-in** — present up to 3 of the most important uncertainties for the user to confirm in one short pass.
 18. **Begin normal cadence.** Cleanup of stale files (per Part 6) is its own separate flow, not bootstrap.
+19. **If bootstrap started from a `KICKOFF.md`** (step 0): delete it now, in its own commit whose message records "preserved in history at commit NN", and note the same pointer in the inaugural `JOURNAL.md` entry — a commit-message-only pointer is invisible from the working tree. The brief served its purpose; keeping it alongside the artifacts it seeded creates a second, rotting source of truth.
 
 An inferred-and-marked artifact beats an empty one. A confident guess does not.
 
@@ -293,8 +374,66 @@ The first cleanup pass on a messy project should be conservative: archive at mos
 
 ---
 
-## Part 7 — What this file does not include
+## Part 7 — Teams: parallel workstreams under one lead
+
+Active at the team and multi-team tiers (`PROJECT_OS.md` Part 7). A project under this OS is often worked by **multiple AI threads at once — one team per workstream** (a feature, a subsystem, design, growth, infra). This is how a single human keeps many streams moving in parallel; this part is what keeps it safe.
+
+### 7.1 — One lead, many workers
+
+- Exactly **one lead thread** (the Orchestrator) owns git. It is the sole author of every git-writing and remote-sync operation (`add` / `commit` / `push` / `pull` / `fetch` / `merge`) and the project's integration point. Every other thread is a **Worker**: it reads, edits, builds, and tests freely, and **never touches git — anywhere, including worktrees**.
+- **Automation commits under the lead's authority.** A scheduled task or hook that writes a generated artifact uses the lead's credential and identity. It is an automation under the lead, not a second committer — one credential, one code path; the commit-numbering guard (7.4) is what keeps two callers on one credential from colliding.
+- Adopting this model is a **recorded decision** (an ADR): the roles, the enforcement level, and the threat model.
+
+### 7.2 — The handoff (the standard mechanic)
+
+Finished work moves through one mechanic — the **uncommitted handoff**:
+
+1. **Verify first.** The worker's build and tests pass before it hands off. Don't hand off broken.
+2. **Leave the work uncommitted** — in the shared working tree, or in the worker's isolated worktree. Uncommitted worktree changes are safe (worktrees are auto-cleaned only when unchanged); the handoff names the worktree path so the lead can read it directly.
+3. **File the queue entry:** an issue on the project's tracker, labeled `ready-for-review`, titled `HANDOFF: <team> — <short summary>`, with the standard body — **Tree** (shared, or the worktree path) · **What changed** (files + symbols + why) · **Verification done** (exact commands + results) · **UI touched?** (what trail was left) · **QA ticket** (required for features; n/a for docs/policy/refactor) · **Needs lead action** (deploy / secret / console, or none).
+4. **Stop.** No commit, no push, no merge, no deploy — even if the task seems to require it. If it does, say so in the issue and stop. The queue replaces relaying work through the user.
+5. **The lead drains the queue** — declared issues, plus `git status` on the shared tree, plus the worktree list. For each handoff: read the actual diff (a worker's "done" is a **claim to re-verify**, not a guarantee), run the integrated gate on the combined result (7.6), then stage the **exact paths** (`git commit <paths>`, never `-a`) and commit with the owner token; close the issue with "merged in `<sha>`".
+6. **The lead bounces** a substantive handoff that lacks its docs artifacts — journal-worthy work with no artifact updates, a feature with no QA ticket. Returning incomplete work to its team is the system working.
+
+The queue is **issues, not a file** — separate entries never collide, and the board (3.19) is explicitly not the queue. For contested shared docs, workers note the intended edit in the handoff instead of racing on the file; the lead serializes at commit time.
+
+**Documented variant — committed worker branches.** Workers committing to isolated, namespaced branches (the lead reviews and merges) is a sanctioned variant **only** with both (a) an explicit hook carve-out permitting worker commits on those branches and (b) a superseding ADR recording the trade. Without both, the fail-closed hooks of 7.3 make the variant inoperable: a worker's commit is blocked everywhere — which is the system working, not a failure.
+
+### 7.3 — Enforcement: fail-closed, out-of-repo
+
+Policy alone fails under load — measured repeatedly, and always during the busiest weeks. At team tier the single-committer rule is enforced by three version-controlled hooks — `pre-commit`, `pre-push`, `pre-merge-commit` — sharing one mechanism:
+
+- An **owner token** lives **outside the repo** (a sibling folder the repo cannot reach): one opaque line in a file only the lead's environment references.
+- Each hook reads the token file and the authorization environment variable, strips whitespace from both, and passes **only on a non-empty exact match**. A missing token file blocks *everyone, the lead included*: fail closed, never open.
+- The lead injects the token **inline per command**, never as a persistent environment variable — a worker thread's ordinary `git commit` must always hit the closed gate.
+- **Honest threat model, stated in the ADR:** this is a guardrail against forgetful threads, not a cryptographic lock. Hook bypasses (`--no-verify`, hooks-path overrides) and plain `fetch` cannot be intercepted client-side; they remain policy-forbidden, and the no-bypass rule stays load-bearing regardless of the hooks.
+- **Policy-only is a recognized downgrade** at adoption time — some projects run the same roles with no hooks. Record the choice and its threat model in the ADR; expect it to hold less firmly.
+
+### 7.4 — Commit numbering
+
+Commits are numbered `NN - description`, direct to the default branch, in **one shared monotonic sequence across all authorized callers** (the lead and any sanctioned automation). The next number is **highest existing + 1 — never a commit count**: count-based picking produces duplicates the moment two callers race. A `commit-msg` hook enforces the format and blocks duplicate numbers, suggesting the next free one. Known limit of the reference implementation: amending a commit while keeping its own number false-positives (the subject is already in history) — amend the message only, or renumber.
+
+### 7.5 — The board
+
+`docs/ORCHESTRATOR.md` (`PROJECT_OS.md` 3.19) is the lead's asynchronous broadcast channel — the coordination bus when threads cannot message each other live. Only the lead writes it (via a `/broadcast` step that appends a dated entry, newest first, never editing past entries). Workers read it at the start of every work cycle. **Two-tier durability:** the board carries current directives and announcements; the permanent contract lives in the docs — a lasting rule graduates into `docs/conventions.md` (or this file, upstream) in the same change that broadcasts it.
+
+### 7.6 — Integration is the lead's job, and it happens at commit time
+
+Because the teams share one codebase, **collisions surface at the seams**: two threads independently declaring the same name in a global namespace, or writing the same shared record with mismatched schemas — each passes per-file checks, and the combination breaks only when loaded together. Durable defenses:
+
+1. **Shared declarations live in ONE module**, imported by the rest — never re-declared per thread. Document shared data schemas at the shared module and have every writer cite it.
+2. **The lead verifies the integrated whole before committing** — the real load path, a full build, the test suite — not just per-file syntax. The single-committer model exists precisely so this gate has one owner.
+3. **Seams with no build-time check get an append-only intake trail.** Where one team produces what another must curate (a design system, a shared vocabulary), the producing teams append to an intake file in the same change as the work, and the owning team drains it. The inbox stays raw and append-only; the curated backlog stays owned.
+
+### 7.7 — Spinning up a team
+
+A workstream is spun up as its **own session** (and, when isolation matters, its own worktree), briefed with a **self-contained work order**: scope, the files and areas it owns, the constraints (no git; verify before handoff), and how to hand off. A spawned session has no memory of the conversation that created it — the brief must stand alone. Teams own their own tickets and keep them as a living backlog; the code still returns through the queue.
+
+---
+
+## Part 8 — What this file does not include
 
 - **The artifact set and templates.** See `PROJECT_OS.md`.
 - **Rendering specifications, edge labels, colors, Mermaid recipes, the viewer spec.** See `PROJECT_OS_VIEWS.md`.
 - **Anything visual.** Behaviour rules are about what the AI does, not what anything looks like.
+- **The user's portfolio- or organization-level choices.** This OS defines mechanisms any project can run; which products adopt which options is recorded in each project's own ADRs and conventions.

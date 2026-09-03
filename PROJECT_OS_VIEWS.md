@@ -1,6 +1,6 @@
 # PROJECT_OS_VIEWS.md
 
-**Status:** Working draft · 0.5.1
+**Status:** Working draft · 0.6
 **Purpose:** How to render the project map as static diagrams and the interactive viewer. This file is the rendering contract that complements the artifact contract in `PROJECT_OS.md` and the runtime contract in `PROJECT_OS_BEHAVIOR.md`.
 
 **Audience:** AI coding agents producing diagrams or building the viewer; humans reviewing what gets rendered.
@@ -337,7 +337,7 @@ Three tiers of UI change:
 
 ## Part 8 — The interactive viewer
 
-Every project organized under this OS ships with an interactive viewer at `docs/viewer/index.html`. The viewer is part of the bootstrap, not optional. It is the human-facing surface of the project map: a single HTML file that reads the live `docs/` tree and renders the seven-layer map as a navigable graph.
+Every project organized under this OS with an in-repo docs tree ships with an interactive viewer at `docs/viewer/index.html`. The viewer is part of the bootstrap, not optional. (The one exemption: a solo project running the externalized profile — `PROJECT_OS.md` Part 7 — keeps its OS in external systems and has no docs tree to render.) It is the human-facing surface of the project map: a single HTML file that reads the live `docs/` tree and renders the seven-layer map as a navigable graph.
 
 ### 8.0 — Why this exists
 
@@ -356,7 +356,7 @@ The trade-off is parser fragility — if the AI writes `### Outcome 1` one day a
 
 ### 8.1 — What the viewer does
 
-**Core capabilities (v0.5.1 must have all of these):**
+**Core capabilities (the viewer must have all of these):**
 
 1. **Renders the eight-layer map as a navigable graph** — Layer 0 at the top, Layer 6 at the bottom, with cross-cutting threads (features, decisions, telemetry, values) shown as overlays.
 2. **Project structure view** — a dedicated panel rendering `docs/structure.md` as a navigable tree. Each folder shows status (Current / Reference / Legacy / Generated / Build artifact), purpose, owner, and touch policy. Orphans and archive candidates are flagged visually. This is the orientation surface for anyone arriving fresh.
@@ -371,7 +371,7 @@ The trade-off is parser fragility — if the AI writes `### Outcome 1` one day a
 11. **Deepest drill-down on the technical layers.** Clicking a container expands its components; clicking a component expands its code-level view with `file:line` deep links. The technical layers (L3–L6) are the most detailed part of the viewer and are reachable by drilling, not buried.
 12. **Constants tab — editable live values (L7).** A dedicated surface showing every constant from `docs/constants.md` as an editable, type-aware input: sliders for numbers, color pickers for hex values, toggles for booleans. Secrets are masked. Changes queue as proposals; a "Copy to AI" button formats them as a JOURNAL-ready block.
 13. **Canvas tab — IcePanel-style spatial view.** A pannable, zoomable canvas with swimlanes per layer, nodes as cards positioned spatially, and bezier-curve edges between related nodes. This is a spatial alternative to the band-based Map view — the same data, different navigation style.
-14. **Ledger tab — AI compute accounting.** A dedicated surface reading `docs/token-ledger.md`: stat cards (sessions, input, output, total tokens), a date-range filter (From / To, matched against the `YYYY-MM-DD` prefix of each row's timestamp), and the session table with a cumulative totals row for the selected range. Read-only — the AI appends the rows (`PROJECT_OS_BEHAVIOR.md`, end-of-session cadence); the viewer only renders them.
+14. **Ledger tab — AI compute accounting.** A dedicated surface reading `docs/token-ledger.md`: stat cards (sessions, input, output, total tokens), a date-range filter (From / To, matched against the `YYYY-MM-DD` prefix of each row's timestamp), and the session table with a cumulative totals row for the selected range. Read-only — the AI appends the rows (`PROJECT_OS_BEHAVIOR.md`, end-of-session cadence); the viewer only renders them. The ledger is optional as of 0.6 (`PROJECT_OS.md` 3.18); the tab's no-file state covers projects without it.
 
 **View depth — technical layers are shown by default:**
 
@@ -487,7 +487,7 @@ The viewer must support:
 
 Pan and zoom on the graph itself are mandatory. The `all-layers.html` example produced for Linger is a reasonable reference.
 
-### 8.7 — Future directions (not in v0.5.1)
+### 8.7 — Future directions (not in the current viewer)
 
 These are explicitly out of scope for the current viewer but worth keeping in mind:
 

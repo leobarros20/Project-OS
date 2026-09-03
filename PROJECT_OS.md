@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.5.1
+**Status:** Working draft · 0.6
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -60,7 +60,7 @@ This contract works for:
 
 ## Part 2 — The artifact set
 
-A project organized under this OS contains the following files. **All listed files are expected to exist on a mature project.**
+A project organized under this OS contains the following files. **All listed files are expected to exist on a mature project at its declared tier** — Part 7 defines the tiers and which pieces activate at each; the *Optional* set below is adopted deliberately, never assumed.
 
 ### Created on day one
 
@@ -75,7 +75,12 @@ docs/outcomes.md
 docs/structure.md
 docs/architecture.md
 docs/constants.md
-docs/token-ledger.md
+```
+
+### Team tier (activated by Part 7)
+
+```
+docs/ORCHESTRATOR.md      (the lead's board — see 3.19)
 ```
 
 ### Filled in as the project grows
@@ -120,7 +125,18 @@ docs/diagrams/
 
 docs/viewer/
   index.html                (interactive viewer — see VIEWS.md)
+
+docs/project-os-status.md   (freshness report — emitted by the freshness check; see 3.21)
 ```
+
+### Optional — adopted per project
+
+```
+docs/token-ledger.md      (AI compute log — see 3.18; optional as of 0.6)
+docs/conventions.md       (working agreement / agent manifesto — see 3.20)
+```
+
+Each is adopted by a recorded decision, not by default. If adopted, each carries a freshness classification like every other artifact (see below).
 
 ### Optional — Conversation history
 
@@ -143,6 +159,28 @@ This folder is not required. When transcripts are present, the AI uses them as a
 Created when the AI proposes a cleanup or migration of stale files (see `BEHAVIOR.md` Part 6). Files moved here are NOT deleted automatically; they remain quarantined until the user confirms in a later session. The folder's `MANIFEST.md` tracks what was moved, when, why, and from where.
 
 **The forcing rule:** if an artifact's content is unknown, the AI fills it with its best inference and marks the section `Status: Inferred`. Empty mandatory files are a failure state. Inferred-and-marked is the floor.
+
+### The freshness rule — every artifact declares how it stays fresh
+
+An artifact whose update cadence is "manual, periodic" will die — the field evidence is uniform: artifacts stay fresh exactly where automation or an enforced ritual forces them, and rot everywhere else, hardest during the busiest weeks, which is when the record matters most. So the OS does not permit an undeclared cadence. **Every artifact the OS declares is explicitly classified** into one of three buckets, and an unclassified artifact is a red state — the check must be able to detect its own incompleteness:
+
+- **CALENDAR** — must be written on a cadence; silence is the failure.
+- **DEBT** — known stale, with a ticket **and an expiry date**. Past the date it is red regardless of contents; an open-ended exemption is how debt becomes permanent.
+- **DESCRIPTIVE** — changes only when its subject changes, so age is not evidence of rot. Each entry records *why* it is trusted, so trust is a decision rather than an oversight.
+
+Generated artifacts (`docs/diagrams/`, `docs/viewer/`, `docs/project-os-status.md`, status dashboards) are build outputs, never maintained files — the only artifact that never rots is the one a check rewrites on every run. Their emitter owns their freshness; while an emitter is not yet wired, the artifact is carried as DEBT (ticketed, expiring), never as a silent lapse.
+
+**Default classification** (a project may re-bucket to match its reality — each move recorded with its reason, in the manifest the freshness check reads):
+
+| Artifact | Default class |
+|---|---|
+| `JOURNAL.md` | CALENDAR — session-end entry; silence fails |
+| `PROJECT_SUMMARY.md` | CALENDAR — refreshed within its limit (default ~30 days) or after major changes |
+| `docs/token-ledger.md` (if adopted) | CALENDAR — session-end, committing layer only |
+| `README.md`, `docs/outcomes.md`, `docs/contexts.md`, `docs/flows.md`, `docs/data-model.md`, `docs/permissions.md`, `docs/integrations.md`, `docs/telemetry.md`, `docs/structure.md`, `docs/screens.md`, `docs/features/`, `docs/decisions/`, `docs/architecture.md`, `docs/components/`, `docs/constants.md`, `docs/ORCHESTRATOR.md`, `docs/conventions.md` | DESCRIPTIVE — trust reason recorded per entry |
+| `docs/diagrams/`, `docs/viewer/`, `docs/project-os-status.md` | GENERATED — the emitter owns freshness; un-wired emitters carry the artifact as DEBT |
+
+How the classification is checked, what the check emits, and the two traps to avoid are behavior — see `BEHAVIOR.md` Part 1 ("The protocol is a process").
 
 ---
 
@@ -762,7 +800,7 @@ A map of every top-level directory and notable subdirectory in this project. Upd
 - `[path]` — [why it's unclear]
 
 ## Archive candidates
-[Things flagged for moving to `.archive/` pending user confirmation. See `BEHAVIOR.md` Part 7.]
+[Things flagged for moving to `.archive/` pending user confirmation. See `BEHAVIOR.md` Part 6.]
 
 - `[path]` — [why it should be archived; what it's superseded by]
 
@@ -974,11 +1012,15 @@ The live values that control how this project behaves. Touchable from the viewer
 
 ---
 
-### 3.18 — docs/token-ledger.md
+### 3.18 — docs/token-ledger.md (optional)
 
 **Purpose:** A session-by-session log of AI compute spend on this project. Every session in which an AI agent performs work under this OS ends with a new row appended here — timestamp, model name, token counts (input, output, total), and a one-line summary of the task. The viewer's **Ledger tab** reads this file and renders it with date-range filtering and cumulative totals, giving any reader an honest accounting of how much compute has been put into this project and what it was spent on.
 
-**A day-one file.** The AI creates it on bootstrap with the header and an empty table, then appends one row per session worked.
+**Optional as of 0.6 — adopted per project.** The field evidence: a ledger survives only where its append is bound to the committing layer's session-end ritual, and dies where it floats free of the protocol. If adopted:
+
+- The append is a **committing-layer ritual**: one row at session end, written by the thread that commits (at team tier, the lead — workers never append).
+- Classify it **CALENDAR (session-end)** in the freshness manifest (Part 2). A ledger the project stops appending is retired honestly — DEBT with a ticket and expiry, or dropped via the cleanup flow with a tombstone note — never left to rot silently.
+- An automated append (a post-commit or scheduled estimator) is a sanctioned upgrade; where one exists, it runs under the lead's credential like any automation (`BEHAVIOR.md` Part 7).
 
 ~~~markdown
 # Token Ledger
@@ -1006,6 +1048,111 @@ AI compute usage per session. Append a new row at the end of each session.
 - Token counts come from the model's own usage reporting where available. If unavailable, prefix with `~` to flag as an estimate (e.g. `~18400`).
 - Never include session content in this file — only the metadata row.
 - The viewer filters by the `YYYY-MM-DD` prefix of the Timestamp column and shows cumulative totals for the selected range.
+
+---
+
+### 3.19 — docs/ORCHESTRATOR.md (team tier)
+
+**Purpose:** The lead's board — the asynchronous broadcast channel every worker thread reads at the start of each work cycle. Standing directives, team charters, and dated broadcasts. Team tier and above only (Part 7); a solo project has no board.
+
+**Not a handoff queue.** Finished work returns through the handoff queue (`BEHAVIOR.md` Part 7), never through this file.
+
+~~~markdown
+# Orchestrator board — [Project]
+
+The lead's broadcast channel to every team. Read this at the START of each work
+cycle. Only the lead writes here (via /broadcast). Workers read it; they never
+edit it. To return finished work, use /handoff — not this file.
+
+## Standing directives (always in effect)
+
+- **One committer.** You are a Worker: never `git commit / push / pull / fetch / merge`
+  — anywhere, including worktrees. Fail-closed hooks block it. Only the lead
+  commits (numbered `NN - description`). (See the single-committer ADR.)
+- [directive]
+
+## Team charters (current)
+
+### [TEAM NAME]
+**Scope:** [what this team owns] · **Ground truth:** [the artifacts/files it reads first]
+**Now:** [current focus + issues] · **Next:** [queued] · **Boundary:** [what it must not touch]
+
+## Broadcasts (newest first — append-only, never edit past entries)
+
+### YYYY-MM-DD · Orchestrator → [audience] — [subject]
+- [directive / status change / hold / per-team instruction — short and actionable]
+~~~
+
+**Rules:**
+
+- Only the lead writes to this file — broadcasts are appended at the top of the Broadcasts section; the directives and charters sections are edited in place. Past broadcasts are never edited.
+- **Two-tier durability.** The board carries *current* directives and announcements; the *permanent* contract lives in the docs. A lasting rule graduates into `docs/conventions.md` (or `BEHAVIOR.md` Part 7 upstream) in the same change that broadcasts it — the board and the commit log are not where rules live.
+- **Contested shared docs:** when two teams need the same file (e.g. `PROJECT_SUMMARY.md`), workers note the intended edit in their handoff instead of racing on the file; the lead serializes at commit time.
+
+---
+
+### 3.20 — docs/conventions.md (optional)
+
+**Purpose:** The project's working agreement — an agent manifesto. Repo-local operating rules that bind every agent in every session, including concurrent ones: coordination discipline, code conventions, security posture, decision authority. Separately versioned, because it is amended by explicit decision, not by drift.
+
+**Why it is a separate file:** the OS trio governs the artifact set, and the user's own tool configuration carries their portable preferences. This file holds what both leave out — how agents share *this* repo without colliding, and the conventions their work must meet.
+
+Header (required):
+
+~~~markdown
+# [Project] Working Agreement (Agent Manifesto)
+
+**Status:** Active · v1.0 · adopted YYYY-MM-DD
+**Binds:** every AI agent that edits this repo (any tool), in every session, including concurrent ones.
+**Authority:** [the user] is the only one who can amend, suspend, or grant an exception to anything in this file. An agent that thinks a rule is wrong asks inline; it does not silently deviate.
+~~~
+
+**Required sections:** Prime directives · Multi-agent coordination · Common code practices · Decisions: autonomous vs. surface-to-the-user · Authority and amendment · Revision history (one dated line per version). Everything else is project-local.
+
+**Rules:**
+
+- Version bumps only on the user's approval; each is dated and logged in the Revision history.
+- When this file and the OS spec appear to disagree, surface it to the user rather than picking silently.
+- Rules graduate *into* this file — from broadcasts, session agreements, and commit messages, which is where rules go to be forgotten.
+
+---
+
+### 3.21 — docs/project-os-status.md (generated)
+
+**Purpose:** The protocol's report of its own state. One generated file listing every artifact the OS declares, its freshness classification (Part 2), how far behind it is, and the action if stale. Agents **read state here; they never derive it** by comparing fifteen file dates. It is emitted by the same freshness check that enforces (`BEHAVIOR.md` Part 1), so it cannot go stale with respect to the repo it describes.
+
+**Never hand-edited.** If it looks old, run the check; do not edit the file — a hand-written status file would itself go stale, and that would be funny exactly once.
+
+Structure (emitted, not authored — adapt to the project's checker):
+
+~~~markdown
+# Project-OS status
+
+Generated by [the freshness check]. Do not edit by hand; rerun [command].
+
+**Read this first.** It is the one place that says what the protocol is owed
+right now. Everything below is derived, so it cannot be out of date with the
+repo it describes.
+
+Reference point: newest substantive commit, **YYYY-MM-DD**.
+
+## Written on a cadence
+| Artifact | Newest entry | Behind | Limit | State |
+
+## Known debt, time-boxed
+| Artifact | Ticket | Due | Days left | Why |
+
+## Trusted, because they change only when their subject does
+| Artifact | Last touched | Why it is trusted |
+
+## What a test cannot see
+- [each honest gap, stated plainly]
+~~~
+
+**Rules:**
+
+- Anything marked LAPSED, MISSING, or PAST DUE is work the current session owes before it finishes — not a note for someone else. Say so in the first message of the session rather than discovering it at commit time.
+- The **"What a test cannot see"** section is mandatory: the check states its own ceiling (see the two traps in `BEHAVIOR.md` Part 1).
 
 ---
 
@@ -1132,7 +1279,35 @@ Each artifact's status values fall into two groups. **Active** = part of the pro
 
 ---
 
-## Part 7 — What this file does not include
+## Part 7 — Tier profiles
+
+A project declares its tier, and the tier decides which parts of the OS activate. The contract scales down as well as up: running team machinery on a solo project is ceremony, and running a solo contract under many concurrent threads is how work gets clobbered.
+
+### The three tiers
+
+| Tier | Shape | What activates |
+|---|---|---|
+| **solo** | One thread works the repo | The artifact set (Parts 2–3) without the teams module. No board, no handoff queue, no committer hooks — the one thread commits directly. |
+| **team** | One lead + worker threads on one repo | Everything in solo, plus the teams module (`BEHAVIOR.md` Part 7): the board (3.19), the handoff queue, single-committer enforcement, commit numbering. |
+| **multi-team** | Several chartered teams under one lead | Team tier, plus team charters on the board (3.19) and per-team focus. |
+
+### The solo tier may externalize the OS
+
+At solo tier the OS may live **outside the repo**: a wiki (Notion or similar) as the human HQ and a project board (GitHub Projects or similar) as the tracker *are* the OS, and the repo keeps only `README.md`, an overview document, and local ADRs recording deviations. This is a recognized profile, not a violation.
+
+- **Declare it:** the README (or the repo's agent-config file) records the tier and points at the external systems.
+- **Deviations are still recorded** — as lightweight local ADRs in `docs/adr/` or `docs/decisions/`.
+- **The freshness rule still applies** to whatever artifacts *do* live in-repo; the external board's freshness is owned by whatever cadence maintains it, named in the tier declaration.
+
+### Declaring the tier
+
+- In-repo tiers: a `Tier:` line in the `PROJECT_SUMMARY.md` header.
+- Externalized solo: the tier note lives in `README.md` (or the agent-config file).
+- Moving between tiers is a **recorded decision** (ADR) — moving up activates enforcement machinery; moving down retires it deliberately.
+
+---
+
+## Part 8 — What this file does not include
 
 - **AI behaviour during sessions.** See `PROJECT_OS_BEHAVIOR.md`.
 - **Rendering and visualization.** See `PROJECT_OS_VIEWS.md`.
