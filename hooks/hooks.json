@@ -1,0 +1,23 @@
+{
+  "_comment": "Ships WITH the plugin. An adopter installs Project-OS and the protocol injects itself — nobody edits their own settings.json, which is the per-repo wiring step that silently never happened. Every command is fully guarded and ends in `|| true`: a broken or absent Project-OS state must never break someone's session.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f .project-os/config.json ] && [ -f docs/project-os-status.md ] && grep -q '\"autoInject\"[^,]*true' .project-os/config.json && sh \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\" || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f .project-os/meta.json ] && [ \"$(node -p \"JSON.parse(require('fs').readFileSync('.project-os/meta.json','utf8')).docsVerifiedAtCommit\" 2>/dev/null)\" != \"$(git rev-parse HEAD 2>/dev/null)\" ] && echo \"[Project-OS] The documentation was last verified against a different commit than HEAD, so it is behind the code. Run the freshness check (see .project-os/config.json 'verify') and write whatever it reports as owed, before adding new work on top.\" || true"
+          }
+        ]
+      }
+    ]
+  }
+}

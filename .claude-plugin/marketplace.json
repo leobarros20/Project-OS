@@ -1,0 +1,11 @@
+{
+  "name": "project-os",
+  "owner": { "name": "Leo Barros", "url": "https://github.com/leobarros20" },
+  "plugins": [
+    {
+      "name": "project-os",
+      "source": "./",
+      "description": "Documentation OS for AI-agent development — living project map, freshness protocol that reports its own state, teams module, and an installation doctor."
+    }
+  ]
+}

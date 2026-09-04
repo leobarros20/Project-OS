@@ -140,6 +140,20 @@ ${t(['Artifact', 'Last touched', 'Why it is trusted'], rows.DESCRIPTIVE)}
 
 ${red.length ? `## RED (${red.length})\n\n${red.map((r) => `- ${r}`).join('\n')}\n` : '## Green\n\nNothing owed.\n'}`;
 
-if (WRITE) { mkdirSync(dirname(OUT), { recursive: true }); writeFileSync(OUT, md); }
+if (WRITE) {
+  mkdirSync(dirname(OUT), { recursive: true });
+  writeFileSync(OUT, md);
+  // Record the commit the docs were last verified against. The SessionStart
+  // drift tripwire compares this to HEAD, so a session opens KNOWING whether the
+  // documentation is behind the code instead of assuming it is not.
+  const meta = join(ROOT, '.project-os/meta.json');
+  mkdirSync(dirname(meta), { recursive: true });
+  writeFileSync(meta, JSON.stringify({
+    docsVerifiedAtCommit: sh('git rev-parse HEAD'),
+    docsVerifiedAtDate: today.toISOString().slice(0, 10),
+    red: red.length,
+    specVersion: versions[0][1],
+  }, null, 2) + '\n');
+}
 console.log(red.length ? `RED (${red.length}):\n${red.map((r) => '  - ' + r).join('\n')}` : 'Project-OS freshness: green');
 process.exit(red.length ? 1 : 0);

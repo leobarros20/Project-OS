@@ -1,0 +1,17 @@
+{
+  "name": "project-os",
+  "description": "A documentation operating system for AI-agent development: a living project map your agent maintains, a freshness protocol that reports its own state, and a doctor that proves the installation actually works.",
+  "version": "0.6.0",
+  "author": { "name": "Leo Barros" },
+  "homepage": "https://github.com/leobarros20/Project-OS",
+  "repository": "https://github.com/leobarros20/Project-OS",
+  "license": "MIT",
+  "keywords": [
+    "documentation",
+    "agent-protocol",
+    "freshness",
+    "multi-agent",
+    "orchestration",
+    "project-map"
+  ]
+}

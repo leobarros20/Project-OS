@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project-OS project configuration",
+  "description": "The nine keys that parameterize the Project-OS skills. Anything not here stays literal in the skill.",
+  "type": "object",
+  "required": ["tier", "verify", "docsPath"],
+  "properties": {
+    "tier": {
+      "enum": ["solo", "team", "multi-team"],
+      "description": "Decides which OS pieces activate (PROJECT_OS.md Part 7). solo: no board, no queue, no committer hooks."
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$",
+      "description": "owner/name. Replaces the repo slug hardcoded into every tracker command."
+    },
+    "tracker": {
+      "enum": ["github", "gitlab", "linear", "none"],
+      "description": "Where the handoff queue lives. 'none' MUST degrade to a file-based queue at docsPath + handoffs/, never break."
+    },
+    "verify": {
+      "type": "string",
+      "description": "The command that must pass before a handoff and at session close. Exit 0 = green."
+    },
+    "commitStyle": {
+      "enum": ["numbered", "conventional"],
+      "description": "numbered = 'NN - description' with the uniqueness guard (BEHAVIOR 7.4); conventional = free subject."
+    },
+    "owner": {
+      "type": "string",
+      "description": "Who 'needs owner action' points at in a handoff body."
+    },
+    "lanes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Team names offered in a handoff body. Empty at solo tier."
+    },
+    "docsPath": {
+      "type": "string",
+      "description": "Where the artifact set lives. Some projects use documentation/ or an external wiki."
+    },
+    "autoInject": {
+      "type": "boolean",
+      "description": "Whether the SessionStart injector is active. True asserts it is registered AND an injection has been observed — presence is not registration."
+    }
+  }
+}
