@@ -61,7 +61,7 @@ is the abuse this design guards against, so each carries its reason.
 |---|---|---|
 | README.md | 2026-09-03 | Public entry point; changes when the artifact set or the adoption story does. |
 | PROJECT_OS.md | 2026-09-03 | The artifact contract; changes only when the contract does. Lockstep with its two companions is checked separately. |
-| PROJECT_OS_BEHAVIOR.md | 2026-09-03 | The runtime contract; changes only when behavior does. |
+| PROJECT_OS_BEHAVIOR.md | 2026-09-04 | The runtime contract; changes only when behavior does. |
 | PROJECT_OS_VIEWS.md | 2026-09-03 | The rendering contract; changes only when rendering does. |
 | viewer/index.html | 2026-06-06 | Reference implementation; changes when a spec'd viewer capability changes. |
 | viewer/README.md | 2026-07-18 | Describes the shipped viewer; changes with it. |
