@@ -149,7 +149,25 @@ check('config', 'Does the config match reality?', () => {
     : { state: 'PASS', detail: `tier=${cfg.tier} · verify runs green · repo and tracker resolve` };
 });
 
-// ------------------------------------------------------------------ 6. honesty
+// ------------------------------------------------------------- 6. the watchdog
+// The out-of-band witness must itself be witnessed. Commit-relative, never
+// wall-clock: a quiet repo with an old ledger is fine; commits with no ledger
+// row behind them mean the watchdog stopped — the one failure nothing else sees.
+check('watchdog', 'Is the out-of-band watchdog alive?', () => {
+  const ledger = join(ROOT, '.project-os/activation-ledger.md');
+  if (!existsSync(join(ROOT, 'activation/watchdog.mjs')) && !existsSync(join(ROOT, '.project-os/watchdog.mjs'))) return { state: 'FAIL', detail: 'no watchdog installed — nothing runs when nobody is working, so a stopped heartbeat can never be noticed' };
+  if (!existsSync(ledger)) return { state: 'WARN', detail: 'watchdog present but has never run (no activation ledger). Install the pre-push hook and a scheduled run (activation/templates/schedule.md).' };
+  const rows = readFileSync(ledger, 'utf8').split('\n').filter((l) => /^\| \d{4}-/.test(l));
+  if (!rows.length) return { state: 'WARN', detail: 'ledger exists but holds no rows yet' };
+  const last = rows[rows.length - 1].split('|').map((s) => s.trim());
+  const lastAt = Date.parse(last[1]);
+  const headTime = Date.parse(quiet('git log -1 --format=%cI HEAD').out || 0);
+  if (headTime > lastAt + 7 * 86400e3) return { state: 'FAIL', detail: `commits landed more than 7 days after the last ledger row (${last[1].slice(0, 10)}, ${last[2]}) — the watchdog was not running; the dead-man's switch is dead` };
+  if (last[4] === 'RED') return { state: 'FAIL', detail: `last watchdog run (${last[2]}, ${last[1].slice(0, 10)}) was RED: ${last[5]}` };
+  return { state: 'PASS', detail: `last run ${last[1].slice(0, 16)} via ${last[2]} at ${last[3]}: ${last[4]}; ${rows.length} row(s) in the ledger` };
+});
+
+// ------------------------------------------------------------------ 7. honesty
 const CANNOT_SEE = [
   'Whether any documented sentence is TRUE. Every check here verifies structure, presence and freshness — never correctness.',
   'Whether an injection actually reached a model. The shim is run and its output measured; that an agent then read it is unobservable from here.',

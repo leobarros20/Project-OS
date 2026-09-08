@@ -101,6 +101,22 @@ const CASES = [
     },
   },
   {
+    id: 'watchdog',
+    what: 'the watchdog stopped: commits exist with no ledger row behind them for over a week',
+    break: (d) => {
+      mkdirSync(join(d, '.project-os'), { recursive: true });
+      writeFileSync(join(d, '.project-os/activation-ledger.md'), '# Activation ledger\n\n| When (UTC) | Source | HEAD | State | Detail |\n|---|---|---|---|---|\n| 2020-01-01T00:00:00.000Z | scheduled | abc1234 | GREEN | ok |\n');
+    },
+  },
+  {
+    id: 'watchdog',
+    what: 'the last watchdog run was RED and nobody acted on it',
+    break: (d) => {
+      mkdirSync(join(d, '.project-os'), { recursive: true });
+      writeFileSync(join(d, '.project-os/activation-ledger.md'), `# Activation ledger\n\n| When (UTC) | Source | HEAD | State | Detail |\n|---|---|---|---|---|\n| ${new Date().toISOString()} | pre-push | abc1234 | RED | freshness: red |\n`);
+    },
+  },
+  {
     id: 'config',
     what: 'the configured verify command does not actually run',
     break: (d) => {

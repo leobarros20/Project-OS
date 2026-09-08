@@ -1,0 +1,15 @@
+#!/bin/sh
+# project-os v0.6 id:watchdog-pre-push
+# The PRIMARY out-of-band witness: runs install integrity, freshness and the
+# activation trail before every push leaves this machine. Blocks the push on
+# red. Installed by `project-os init` into .git/hooks/ (or the repo's
+# core.hooksPath directory, where one exists — init refuses to overwrite a
+# hook it did not write).
+#
+# Bypassable with --no-verify, and that is policy-forbidden: a bypassed
+# watchdog still writes its ledger row, so the bypass is visible afterwards.
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -f "$ROOT/.project-os/config.json" ] || exit 0
+command -v node >/dev/null 2>&1 || { echo "[Project-OS] watchdog skipped: node not on PATH" 1>&2; exit 0; }
+WD="$ROOT/.project-os/watchdog.mjs"; [ -f "$WD" ] || WD="$ROOT/activation/watchdog.mjs"
+node "$WD" --source pre-push
