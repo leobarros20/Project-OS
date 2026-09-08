@@ -27,7 +27,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const VERSION = '0.6';
+const VERSION = '0.6.1';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.
@@ -98,7 +98,7 @@ try {
     detail,
     `OPENING: read ${docsPath}project-os-status.md — it is generated, so it is the one place that cannot be stale about what the protocol is owed right now. Do not re-derive obligations from file dates.`,
     `CLOSING, before handing back or committing: same-change artifacts travel with the code; the journal entry records what you did AND what you could not verify; run \`${cfg.verify || 'verify'}\`. If a freshness gate is red, write the missing artifact — never raise a threshold, reclassify an entry, or extend a debt expiry to get green.`,
-    cfg.tier && cfg.tier !== 'solo' ? `TIER ${cfg.tier}: you may be a Worker. Workers never run git; finished work returns with /handoff.` : '',
+    cfg.tier && cfg.tier !== 'solo' ? `TIER ${cfg.tier}: you may be a Worker: commit and push only to your own branch, never to main; finished work returns as a pull request via /handoff.` : '',
     owed ? `OWED RIGHT NOW:\n${owed}` : 'OWED RIGHT NOW: nothing — freshness is green.',
   ].filter(Boolean).join('\n\n');
 

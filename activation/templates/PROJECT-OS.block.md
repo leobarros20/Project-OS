@@ -1,11 +1,11 @@
-<!-- BEGIN PROJECT-OS v0.6 — do not edit inside these markers; `project-os init` rewrites this block -->
+<!-- BEGIN PROJECT-OS v0.6.1 — do not edit inside these markers; `project-os init` rewrites this block -->
 ## Project-OS — read before doing anything
 
 This repo runs under Project-OS. The protocol is a process, not a memory test:
 you do not have to remember it, but you do have to check that it reached you.
 
 **1. Did activation fire?** If your context already contains a line beginning
-`PROJECT-OS v0.6 ACTIVE`, automatic activation happened — follow what it says.
+`PROJECT-OS v0.6.1 ACTIVE`, automatic activation happened — follow what it says.
 **If it did not**, automatic activation did NOT happen on this machine. Say so
 in your first reply, in one line, then run it by hand:
 
@@ -29,9 +29,10 @@ If a freshness gate is red, write the missing artifact — never raise a
 threshold, reclassify an entry, or extend a debt expiry to get green.
 
 **4. At team tier** (`tier` in `.project-os/config.json` is not `solo`): you may
-be a Worker. Workers never run `git commit / push / pull / merge`, anywhere.
-Finished work returns with `/handoff`.
+be a Worker — one topic, one branch. Commit and push only to YOUR branch, never
+to `main`; never merge. Rebase on `main`, then return finished work as a pull
+request with `/handoff`. The lead is the only merger.
 
 The full contract: `PROJECT_OS.md`, `PROJECT_OS_BEHAVIOR.md`, `PROJECT_OS_VIEWS.md`
 (shipped with the Project-OS plugin; the spec is not copied into this repo).
-<!-- END PROJECT-OS v0.6 -->
+<!-- END PROJECT-OS v0.6.1 -->

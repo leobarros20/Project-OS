@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.6
+**Status:** Working draft · 0.6.1
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -1066,9 +1066,10 @@ edit it. To return finished work, use /handoff — not this file.
 
 ## Standing directives (always in effect)
 
-- **One committer.** You are a Worker: never `git commit / push / pull / fetch / merge`
-  — anywhere, including worktrees. Fail-closed hooks block it. Only the lead
-  commits (numbered `NN - description`). (See the single-committer ADR.)
+- **One merger.** You are a Worker: commit and push only to YOUR branch. Never
+  commit to `main`, never merge, never rebase another team's branch. Fail-closed
+  hooks guard `main`. Finished work is a pull request; the lead is the only
+  merger. (See the single-merger ADR.)
 - [directive]
 
 ## Team charters (current)
@@ -1288,7 +1289,7 @@ A project declares its tier, and the tier decides which parts of the OS activate
 | Tier | Shape | What activates |
 |---|---|---|
 | **solo** | One thread works the repo | The artifact set (Parts 2–3) without the teams module. No board, no handoff queue, no committer hooks — the one thread commits directly. |
-| **team** | One lead + worker threads on one repo | Everything in solo, plus the teams module (`BEHAVIOR.md` Part 7): the board (3.19), the handoff queue, single-committer enforcement, commit numbering. |
+| **team** | One lead + worker threads on one repo | Everything in solo, plus the teams module (`BEHAVIOR.md` Part 7): one merger, one branch per topic, PR handoffs, the board (3.19), enforcement, commit numbering. |
 | **multi-team** | Several chartered teams under one lead | Team tier, plus team charters on the board (3.19) and per-team focus. |
 
 ### The solo tier may externalize the OS

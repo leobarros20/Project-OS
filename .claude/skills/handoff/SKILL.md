@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Return finished work to the lead for review and commit. Worker threads only — never commit, push, merge or deploy. Reads .project-os/config.json for the repo, tracker, lanes and verify command.
+description: Return finished work to the lead as a pull request from your own branch. Worker threads only — never touch main, never merge. Reads .project-os/config.json for the repo, tracker, lanes and verify command.
 ---
 
 # /handoff — return finished work
@@ -8,60 +8,60 @@ description: Return finished work to the lead for review and commit. Worker thre
 Team tier and above (`.project-os/config.json` → `tier`). At solo tier there is
 no lead to hand to; commit directly.
 
-Read `.project-os/config.json` first. Every `<bracket>` below comes from it.
+You are one topic, on one branch. Everything you decided lives in this thread
+and this branch; the PR is where the record of *how* it was resolved ends up.
+Keep it that way — do not wander into another team's territory, and do not
+touch `main`.
 
-## 1. Get green before you hand off
+## 1. Get green
 
 ```
 <verify>
 ```
 
-Don't hand off broken. A worker's "done" is a claim the lead re-verifies, so a
-failing handoff costs two people's time instead of one.
+Don't hand off broken. A worker's "done" is a claim the merger re-verifies, so
+a failing handoff costs two people's time instead of one.
 
-## 2. Leave the work uncommitted
+## 2. Rebase on main, then push your branch
 
-**Do not stage, commit, branch, or push — anywhere, including a worktree.**
-Fail-closed hooks block it at team tier, and that block is the system working.
+```bash
+git fetch origin && git rebase origin/main     # resolve conflicts HERE, on your branch
+git push --force-with-lease origin <your-branch>
+```
 
-- **Shared tree:** leave the edits in place; the lead picks them up from `git status`.
-- **Isolated worktree:** leave them uncommitted there and name the path below.
-  Worktrees are auto-cleaned only when unchanged, so uncommitted work is safe.
+A PR that drifts behind `main` is a zombie: it cannot be reviewed against
+reality and its conflicts compound. Rebasing is yours to do, every time you
+open or update the PR. Your branch is yours to commit and push freely; `main`
+is never yours.
 
-## 3. File the queue entry
+## 3. Open (or update) the pull request
 
 **`tracker: github`**
 ```bash
-gh label create ready-for-review --repo <repo> --color FBCA04 \
-  --description "Worker handoff awaiting lead review" 2>/dev/null || true
-
-gh issue create --repo <repo> --label ready-for-review \
-  --title "HANDOFF: <lane> — <short summary>" \
+gh pr create --repo <repo> --base main --head <your-branch> \
+  --title "<lane>: <short summary>" \
   --body "$(cat <<'BODY'
-**Tree:** <shared working tree | .claude/worktrees/NAME/>
 **What changed:** <files + symbols + why>
-**Verification done:** <exact commands run + result>
+**Verification done:** <exact commands run + result, on the rebased branch>
 **UI?** <trail left where the project keeps it, or n/a>
 **QA ticket:** <#issue — REQUIRED for a feature; n/a for docs/policy/refactor>
 **Needs <owner> action:** <deploy / secret / console, or none>
+**Territory touched outside my lane:** <none, or which files and why — the merger decides>
 BODY
 )"
 ```
 
-**`tracker: gitlab`** — same body, `glab issue create --label ready-for-review`.
-**`tracker: linear`** — same body as the issue description, label `ready-for-review`.
-**`tracker: none`** — degrade, never break: append the same body to
-`<docsPath>handoffs/YYYY-MM-DD-<lane>.md`. A file queue is worse than an issue
-queue at notifying, and it is much better than no queue.
+**`tracker: gitlab`** — same body, `glab mr create`.
+**`tracker: linear`** — open the PR on the remote; link it from the issue.
+**`tracker: none`** — no PR-capable remote: use the **uncommitted variant**.
+Leave the work uncommitted in your tree, append the same body to
+`<docsPath>handoffs/YYYY-MM-DD-<lane>.md`, and know the risk: uncommitted work
+in a worktree disappears with a `worktree remove`.
 
 Lanes for this project: `<lanes>`.
 
 ## 4. Stop
 
-No commit, no push, no merge, no deploy — even if the task appears to require
-it. If it does, say so in the queue entry and stop. The lead reviews, verifies,
-commits and closes.
-
-If the contested file another lane is also editing needs a change, **note the
-intended edit in the handoff instead of racing on the file.** The lead
-serializes at commit time.
+No merge, no push to `main`, no deploy — even if the task appears to require
+it. If it does, say so in the PR and stop. The merger reviews, verifies in a
+clean worktree, resolves any conflict *between* PRs, and merges.

@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.6
+**Current version:** 0.6.1
 
 This file does two jobs:
 
@@ -19,6 +19,26 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.6.1 — 2026-09-08
+
+### What changed
+
+- **The teams module recommends one branch per topic and one merger, from bootstrap** (`BEHAVIOR.md` 7.2, inverted). 0.6 made the uncommitted handoff the standard and worker branches a gated variant. Field use decided otherwise: the recommended model is now a lead that owns `main` and is the only merger; one worker per topic on its own branch, committing and pushing to it freely; the handoff is a pull request; conflicts are resolved in the PR by the single merger. **Why, stated in the spec and not just the mechanism:** each worker's context stays *closed around one topic and rich in the resolutions made there*, and the PR is the durable record of how each thing was resolved.
+- **The rules that keep the model from degenerating are explicit:** territory and file ownership persist (branches do not stop two teams editing one file; ownership does); workers rebase on `main` before opening or updating a PR (reference case: four zombie PRs 9–47 commits behind); fail-closed hooks guard `main`, not the workers' branches; the merger verifies locally in a clean worktree, because hosted CI is never a dependency.
+- **The uncommitted handoff is now the documented variant** — legitimate at solo tier or with no PR-capable remote, with its risk written down: work living only uncommitted in a worktree disappears with a `worktree remove`.
+- **The roster depends on the kind of project** (7.7, bootstrap 16b): the AI proposes teams from what it detects — a game, a mobile app and a site do not share a roster — and the lead adjusts.
+- **The four team skills** follow the new model; the board's standing directive and the activation payload say "your branch, never `main`".
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.6.1 versions.
+2. If the project is at team tier and runs the uncommitted handoff with a PR-capable remote: adopt the branch model **at a natural break**, not mid-flight — record it as an ADR (superseding the single-committer one), update the board's standing directive, and re-point the hooks to guard `main` rather than all commits. If the remote cannot hold PRs, or the tier is solo, record that the uncommitted variant stays, with its written risk.
+3. Add the rebase-before-PR rule and the local-clean-worktree verification to the lead's `/handoffs` step; ensure every worker brief names its territory.
+4. If no roster exists on the board, propose one from `docs/architecture.md` / `docs/screens.md` for the lead to adjust.
+5. `JOURNAL.md` entry for the upgrade.
 
 ---
 

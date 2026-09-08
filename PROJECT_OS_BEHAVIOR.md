@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.6
+**Status:** Working draft · 0.6.1
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, bootstrapping, and team orchestration. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -298,7 +298,7 @@ If starting from an existing project that does NOT follow this OS:
 15. **Render the diagrams in `docs/diagrams/`** per `VIEWS.md` — master map first, then per-layer views. Render the technical layers (containers, components, code) to full depth, not just the intent layers; the structural views are the most detailed.
 16. **Scaffold `docs/viewer/index.html`** per the viewer spec in `VIEWS.md`. The viewer is part of the bootstrap, not optional. It must default to the **current** view with technical layers shown (not hidden behind a toggle).
 16a. **Wire the freshness check** (Part 1): classify every artifact per `PROJECT_OS.md` Part 2, wire the check into the project's own test or build system, emit `docs/project-os-status.md`, and verify the check is not vacuous (delete one manifest entry → red; age a doc → red without a forced rerun). Create the `project-os` skill from the Part 1 template and point the repo's agent-config file at it.
-16b. **If the tier is team or multi-team** (Part 7): stand up the teams module — the board (`PROJECT_OS.md` 3.19), the handoff / handoffs / broadcast / team skills (shipped: `.claude/skills/`), single-committer enforcement (fail-closed hooks + out-of-repo owner token, or a recorded policy-only downgrade), and the commit-numbering guard. Record single-committer as an ADR.
+16b. **If the tier is team or multi-team** (Part 7): recommend the model from the start — **one lead that owns `main` and is the only merger; one worker per topic on its own branch; the handoff is a pull request** — and say *why*: it keeps each worker's context closed around one topic and rich in the resolutions made there, with the PR as the record of how each thing was resolved. Then stand up the module: propose the team roster from what bootstrap detected (7.7) for the lead to adjust; the board (`PROJECT_OS.md` 3.19); the handoff / handoffs / broadcast / team skills (shipped: `.claude/skills/`); single-merger enforcement (fail-closed hooks guarding `main` + out-of-repo owner token, or a recorded policy-only downgrade); the commit-numbering guard. Record the model as an ADR.
 17. **Surface inferred content in a single Mode 3 check-in** — present up to 3 of the most important uncertainties for the user to confirm in one short pass.
 18. **Begin normal cadence.** Cleanup of stale files (per Part 6) is its own separate flow, not bootstrap.
 19. **If bootstrap started from a `KICKOFF.md`** (step 0): delete it now, in its own commit whose message records "preserved in history at commit NN", and note the same pointer in the inaugural `JOURNAL.md` entry — a commit-message-only pointer is invisible from the working tree. The brief served its purpose; keeping it alongside the artifacts it seeded creates a second, rotting source of truth.
@@ -384,24 +384,26 @@ Active at the team and multi-team tiers (`PROJECT_OS.md` Part 7). A project unde
 - **Automation commits under the lead's authority.** A scheduled task or hook that writes a generated artifact uses the lead's credential and identity. It is an automation under the lead, not a second committer — one credential, one code path; the commit-numbering guard (7.4) is what keeps two callers on one credential from colliding.
 - Adopting this model is a **recorded decision** (an ADR): the roles, the enforcement level, and the threat model.
 
-### 7.2 — The handoff (the standard mechanic)
+### 7.2 — The handoff: one branch per topic, one merger (the recommended model)
 
-Finished work moves through one mechanic — the **uncommitted handoff**:
+Recommended from bootstrap, for every project with a remote that can hold pull requests. **Why this shape, and not just what:** each worker is a conversation **closed around one topic and rich in resolutions** — its scope, its decisions and its trade-offs live inside that one thread and that one branch, so nothing bleeds across areas and nothing is lost when the thread ends. The pull request is the durable record of *how each thing was resolved*, and one merger is the single point where the pieces are proven to fit.
 
-1. **Verify first.** The worker's build and tests pass before it hands off. Don't hand off broken.
-2. **Leave the work uncommitted** — in the shared working tree, or in the worker's isolated worktree. Uncommitted worktree changes are safe (worktrees are auto-cleaned only when unchanged); the handoff names the worktree path so the lead can read it directly.
-3. **File the queue entry:** an issue on the project's tracker, labeled `ready-for-review`, titled `HANDOFF: <team> — <short summary>`, with the standard body — **Tree** (shared, or the worktree path) · **What changed** (files + symbols + why) · **Verification done** (exact commands + results) · **UI touched?** (what trail was left) · **QA ticket** (required for features; n/a for docs/policy/refactor) · **Needs lead action** (deploy / secret / console, or none).
-4. **Stop.** No commit, no push, no merge, no deploy — even if the task seems to require it. If it does, say so in the issue and stop. The queue replaces relaying work through the user.
-5. **The lead drains the queue** — declared issues, plus `git status` on the shared tree, plus the worktree list. For each handoff: read the actual diff (a worker's "done" is a **claim to re-verify**, not a guarantee), run the integrated gate on the combined result (7.6), then stage the **exact paths** (`git commit <paths>`, never `-a`) and commit with the owner token; close the issue with "merged in `<sha>`".
-6. **The lead bounces** a substantive handoff that lacks its docs artifacts — journal-worthy work with no artifact updates, a feature with no QA ticket. Returning incomplete work to its team is the system working.
+1. **The lead owns the default branch and is the only merger.** Nothing reaches `main` except through the lead's merge.
+2. **One worker per topic, on its own branch** (`team/<name>` or `claude/<topic>`). The worker commits and pushes to *that branch* freely — its own history is its own. It never touches `main`, never merges, never rebases anyone else's branch.
+3. **Verify before handing off.** The project's verify command passes on the branch. Don't hand off broken.
+4. **Rebase on `main` before opening or updating the PR.** A PR that drifts dozens of commits behind is a zombie: it cannot be reviewed against reality and its conflicts compound (reference case: four stale PRs, 9 to 47 commits behind). Rebase is the worker's job, every time.
+5. **The handoff is the pull request**, with the standard body — **What changed** (files + symbols + why) · **Verification done** (exact commands + results) · **UI touched?** (what trail was left) · **QA ticket** (required for features) · **Needs lead action** (deploy / secret / console, or none). The PR *is* the queue entry; a tracker issue is optional cross-reference, not the mechanism.
+6. **Conflicts are resolved in the PR, by the merger.** A worker that hits a conflict with `main` rebases and resolves on its own branch; a conflict *between* two PRs is the merger's call, made once, in the PR, and recorded there.
+7. **The merger verifies locally in a clean worktree before merging** — hosted CI is never a dependency (see the watchdog). A worker's "done" is a **claim to re-verify**, not a guarantee, and the integrated whole is what gets verified (7.6).
+8. **The merger bounces** a substantive PR that lacks its docs artifacts — journal-worthy work with no artifact updates, a feature with no QA ticket. Returning incomplete work is the system working.
 
-The queue is **issues, not a file** — separate entries never collide, and the board (3.19) is explicitly not the queue. For contested shared docs, workers note the intended edit in the handoff instead of racing on the file; the lead serializes at commit time.
+**Territory still exists.** Branches do not stop two teams from editing the same file; *ownership* does. Every worker's brief names the files and areas it owns (7.7); shared declarations live in one module (7.6); contested shared docs are noted in the PR instead of raced on.
 
-**Documented variant — committed worker branches.** Workers committing to isolated, namespaced branches (the lead reviews and merges) is a sanctioned variant **only** with both (a) an explicit hook carve-out permitting worker commits on those branches and (b) a superseding ADR recording the trade. Without both, the fail-closed hooks of 7.3 make the variant inoperable: a worker's commit is blocked everywhere — which is the system working, not a failure.
+**Documented variant — the uncommitted handoff.** At solo tier, or when the project has no remote that can hold PRs (`tracker: none`), workers leave finished work uncommitted in the shared tree or an isolated worktree and file a queue entry (an issue, or a file under `<docsPath>handoffs/`); the lead drains from `git status` and the worktree list, stages exact paths and commits. Legitimate, and carrying its own written risk: **work that lives only uncommitted in a worktree disappears with a `worktree remove`** — it has happened. Prefer the branch model wherever a remote exists.
 
 ### 7.3 — Enforcement: fail-closed, out-of-repo
 
-Policy alone fails under load — measured repeatedly, and always during the busiest weeks. At team tier the single-committer rule is enforced by three version-controlled hooks — `pre-commit`, `pre-push`, `pre-merge-commit` — sharing one mechanism:
+Policy alone fails under load — measured repeatedly, and always during the busiest weeks. At team tier the single-merger rule is enforced by three version-controlled hooks — `pre-commit`, `pre-push`, `pre-merge-commit` — sharing one mechanism. **They guard `main`, not the workers' branches:** a worker committing or pushing to its own branch passes; a worker committing to `main`, pushing to `main`, or merging anything is blocked. (Under the uncommitted variant, the same hooks block worker commits everywhere.)
 
 - An **owner token** lives **outside the repo** (a sibling folder the repo cannot reach): one opaque line in a file only the lead's environment references.
 - Each hook reads the token file and the authorization environment variable, strips whitespace from both, and passes **only on a non-empty exact match**. A missing token file blocks *everyone, the lead included*: fail closed, never open.
@@ -425,9 +427,11 @@ Because the teams share one codebase, **collisions surface at the seams**: two t
 2. **The lead verifies the integrated whole before committing** — the real load path, a full build, the test suite — not just per-file syntax. The single-committer model exists precisely so this gate has one owner.
 3. **Seams with no build-time check get an append-only intake trail.** Where one team produces what another must curate (a design system, a shared vocabulary), the producing teams append to an intake file in the same change as the work, and the owning team drains it. The inbox stays raw and append-only; the curated backlog stays owned.
 
-### 7.7 — Spinning up a team
+### 7.7 — Spinning up a team, and which teams to spin up
 
-A workstream is spun up as its **own session** (and, when isolation matters, its own worktree), briefed with a **self-contained work order**: scope, the files and areas it owns, the constraints (no git; verify before handoff), and how to hand off. A spawned session has no memory of the conversation that created it — the brief must stand alone. Teams own their own tickets and keep them as a living backlog; the code still returns through the queue.
+**The roster depends on the kind of project.** A game does not have the same teams as a mobile app, and neither looks like a website or an internal tool. At bootstrap (Part 5, step 16b) the AI **proposes a roster from what it detects** — the containers in `docs/architecture.md`, the surfaces in `docs/screens.md`, the flows — one topic per worker, and the lead adjusts it. Typical shapes: a game → engine/physics, gameplay, content, UI, build; a mobile app → client, backend/sync, design system, growth, release; a site → content, frontend, infra. The roster lives on the board (3.19, Team charters) and in `lanes` of `.project-os/config.json`.
+
+A workstream is spun up as its **own session** on its **own branch**, briefed with a **self-contained work order**: the topic, the files and areas it owns (territory), the constraints (own branch only; verify and rebase before the PR), and how to hand off. A spawned session has no memory of the conversation that created it — the brief must stand alone. Teams own their own tickets and keep them as a living backlog; the code still returns through the PR.
 
 ---
 

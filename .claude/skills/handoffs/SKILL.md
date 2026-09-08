@@ -1,62 +1,54 @@
 ---
 name: handoffs
-description: Drain the handoff queue — list every workstream ready for review, verify each, then commit and close. Lead only. Run it at the start of a working turn so the user never has to relay a handoff.
+description: Drain the pull-request queue — list every branch ready for review, verify each locally, resolve conflicts once, merge. Lead only; you are the single merger. Run it at the start of a working turn so the user never has to relay a handoff.
 ---
 
 # /handoffs — drain the queue
 
-Lead only. Read `.project-os/config.json`; every `<bracket>` comes from it.
+Lead only. You own `main` and you are the only merger. Read
+`.project-os/config.json`; every `<bracket>` comes from it.
 
-## 1. Gather the queue (three sources, not one)
+## 1. Gather the queue
 
 ```bash
-# declared queue — tracker: github
-gh issue list --repo <repo> --label ready-for-review --state open
-# tracker: none → ls <docsPath>handoffs/
-
-git status --short        # shared-tree work other sessions left
-git worktree list         # isolated worktrees, work left uncommitted inside
+gh pr list --repo <repo> --base main --state open        # the declared queue
+git fetch origin && git branch -r --no-merged origin/main  # branches with work, PR or not
 ```
 
-Map the three together. Do **not** sweep in uncommitted edits nobody handed
-off: that is either in-flight work that does not compile yet, or another lane's
-half-finished slice. Both have happened, and both look identical to a handoff
-from the outside.
+`tracker: none` → the uncommitted variant: `git status --short`, `git worktree
+list`, and `<docsPath>handoffs/`. Do **not** sweep in uncommitted edits nobody
+handed off — in-flight work and a handoff look identical from outside.
 
-## 2. Review, then integrate
+## 2. Per PR: is it current, is it true, does it fit
 
-A worker's "done" is **a claim to re-verify, not a guarantee** — the tree may
-also have changed since the claim was written.
+1. **Is it rebased?** `git rev-list --count origin/main..origin/<branch>` and
+   `--count origin/<branch>..origin/main`. Behind `main` → send it back to
+   rebase. Do not rebase a worker's branch for them; that is their thread's
+   record.
+2. **Read the actual diff.** A worker's "done" is **a claim to re-verify**, and
+   the branch may have moved since the claim was written.
+3. **Verify locally, in a clean worktree** — hosted CI is never a dependency:
+   ```bash
+   git worktree add --detach /tmp/po-verify origin/<branch> && (cd /tmp/po-verify && <verify>); git worktree remove /tmp/po-verify
+   ```
+   Keep the path short; long ones fail on Windows.
+4. **Does it fit with the other open PRs?** Two PRs that each pass alone can
+   collide when combined — the same name declared twice, a shared record
+   written with two shapes. Merge them in an order that surfaces it, and verify
+   the integrated `main` after each merge, not once at the end.
+5. **Territory.** A PR touching files outside its lane's ownership says so in
+   its body. If it does not, bounce it. If it does, you decide — once, in the
+   PR, with a comment that records why.
+6. **Bounce** substantive PRs missing their docs artifacts: journal-worthy work
+   with no artifact updates, a feature with no QA ticket. Returning incomplete
+   work is the gate doing its job.
 
-1. Read the actual diff. Not the summary of it.
-2. Run the integrated gate on the combined result: `<verify>`. Per-file checks
-   pass on collisions that only break when the pieces load together — the same
-   name declared in two lanes, the same shared record written with mismatched
-   shapes. Catching those is the whole reason one person integrates.
-3. **Bounce** a substantive handoff missing its docs artifacts: journal-worthy
-   work with no artifact updates, a feature with no QA ticket. Returning
-   incomplete work is the gate doing its job.
+## 3. Merge, then close the loop
 
-If another lane's in-flight work breaks compilation, verify yours in a clean
-worktree at HEAD. Never revert their work, never sweep it in.
+Merge with the owner token injected inline (never exported); `commitStyle`
+applies to the merge commit. Then run the session close phase (`/project-os`)
+so the journal entry and the freshness gates cover what just landed on `main`.
 
-## 3. Commit and close
-
-Stage the **exact paths** (`git commit <paths>`, never `-a`/`-A`).
-
-- `commitStyle: numbered` → next number is **highest existing + 1**, never a
-  commit count: `git log --pretty=%s | grep -oE '^[0-9]+' | sort -n | tail -1`.
-  Count-based picking produces duplicates the moment two callers race.
-- `commitStyle: conventional` → a descriptive subject.
-
-Where single-committer hooks are installed, the owner token is injected inline
-per command, never exported into the environment — a persistent variable would
-authorize every thread in that shell.
-
-Then close: `gh issue close <n> --repo <repo> --comment "merged in <sha>"`.
-
-Finally run the session close phase (`/project-os`) so the journal entry and
-the freshness gates cover what just landed.
-
-**Never bypass the hooks.** If a worker committed or pushed anywhere, that is a
-violation — surface it to <owner> rather than quietly fixing it.
+**Conflicts between PRs are yours.** Resolve them in the PR, once, and leave
+the resolution written there. Nobody else merges, ever — a worker that merged
+or pushed to `main` is a violation to surface to <owner>, not to quietly fix.
