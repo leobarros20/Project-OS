@@ -1,0 +1,3 @@
+# project-os v0.6 id:activation-codex — appended to .codex/config.toml by `project-os init`
+[features]
+codex_hooks = true

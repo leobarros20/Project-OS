@@ -38,16 +38,27 @@ const writeJSON = (p, o) => writeFileSync(p, JSON.stringify(o, null, 2));
 // Each case: break one thing, then require that check id to come back FAIL.
 const CASES = [
   {
-    id: 'injector',
-    what: 'config claims autoInject:true while nothing registers the hook',
-    break: (d) => { const c = readJSON(join(d, '.project-os/config.json')); c.autoInject = true; writeJSON(join(d, '.project-os/config.json'), c); },
+    id: 'activation',
+    what: 'the shim stops emitting the sentinel (a vendor would receive a payload that is not the protocol)',
+    break: (d) => {
+      const p = join(d, 'activation/activate.mjs');
+      writeFileSync(p, readFileSync(p, 'utf8').replace('PROJECT-OS v${VERSION} ACTIVE', 'project-os active'));
+    },
   },
   {
-    id: 'injector',
-    what: 'config claims autoInject:true and the injector script is gone entirely',
+    id: 'activation',
+    what: 'the shim goes silent on an installed repo (exits 0 with no payload — the one illegal outcome)',
     break: (d) => {
-      const c = readJSON(join(d, '.project-os/config.json')); c.autoInject = true; writeJSON(join(d, '.project-os/config.json'), c);
-      rmSync(join(d, '.claude/hooks/project-os-open.sh'), { force: true });
+      const p = join(d, 'activation/shim.sh');
+      writeFileSync(p, '#!/bin/sh\nexit 0\n');
+    },
+  },
+  {
+    id: 'activation',
+    what: 'the last real heartbeat says BROKEN_ACTIVATION (a commit landed with no session firing)',
+    break: (d) => {
+      mkdirSync(join(d, '.project-os'), { recursive: true });
+      writeJSON(join(d, '.project-os/heartbeat.json'), { phase: 'done', at: '2020-01-01T00:00:00.000Z', vendor: 'claude', state: 'BROKEN_ACTIVATION' });
     },
   },
   {

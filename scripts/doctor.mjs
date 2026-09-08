@@ -40,38 +40,23 @@ const cfg = existsSync(cfgPath) ? JSON.parse(readFileSync(cfgPath, 'utf8')) : nu
 const manifestPath = join(ROOT, 'project-os-manifest.json');
 const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : null;
 
-// ---------------------------------------------------------------- 1. injector
-// The failure this repo actually hit: the script existed, nothing declared it.
-check('injector', 'Is the injector wired and firing?', () => {
-  const script = join(ROOT, '.claude/hooks/project-os-open.sh');
-  const declared = cfg && cfg.autoInject === true;
-  if (!existsSync(script)) {
-    return declared
-      ? { state: 'FAIL', detail: 'config says autoInject:true but .claude/hooks/project-os-open.sh does not exist' }
-      : { state: 'SKIP', detail: 'no injector script, and the config does not claim one (autoInject:false)' };
+// -------------------------------------------------------------- 1. activation
+// Presence is not registration, registration is not firing, and firing is not
+// being read. No vendor exposes "is my hook registered?", so this check does the
+// two things that ARE observable: run the shim exactly as each vendor would and
+// parse its output against the shared contract, then read the heartbeat trail.
+check('activation', 'Does activation behave as every vendor expects, and has it been firing?', () => {
+  const suite = quiet('node scripts/activation-test.mjs');
+  if (!suite.ok) {
+    const fails = suite.out.split('\n').filter((l) => l.includes('[ FAIL ]')).map((l) => l.replace(/.*\]\s*/, ''));
+    return { state: 'FAIL', detail: `vendor simulation failed: ${fails.join(' · ') || suite.out.slice(-200)}` };
   }
-  const candidates = ['.claude/settings.json', '.claude/settings.local.json', 'hooks/hooks.json'];
-  const registeredIn = candidates.filter((f) => {
-    const p = join(ROOT, f);
-    if (!existsSync(p)) return false;
-    try {
-      const txt = readFileSync(p, 'utf8');
-      return /SessionStart/.test(txt) && /project-os-open/.test(txt);
-    } catch { return false; }
-  });
-  if (registeredIn.length === 0) {
-    return declared
-      ? { state: 'FAIL', detail: 'config claims autoInject:true, but no SessionStart registration references the script — presence mistaken for registration, the exact failure this check exists for' }
-      : { state: 'WARN', detail: 'injector present but NOT registered (no SessionStart hook references it); config honestly records autoInject:false. Until it is registered, no session receives it.' };
-  }
-  const run = quiet('sh .claude/hooks/project-os-open.sh');
-  if (!run.ok || !run.out.trim()) {
-    return { state: 'FAIL', detail: `registered in ${registeredIn.join(', ')} but produced no output when run — an injector that emits nothing injects nothing` };
-  }
-  if (!declared) {
-    return { state: 'WARN', detail: `registered in ${registeredIn.join(', ')} and produces output, but config says autoInject:false — the config disagrees with reality` };
-  }
-  return { state: 'PASS', detail: `registered in ${registeredIn.join(', ')}; produces ${run.out.split('\n').length} lines of injected context` };
+  const hb = existsSync(join(ROOT, '.project-os/heartbeat.json')) ? JSON.parse(readFileSync(join(ROOT, '.project-os/heartbeat.json'), 'utf8')) : null;
+  if (!hb) return { state: 'WARN', detail: 'shim behaves correctly for claude/codex/gemini (simulated), but no heartbeat exists on this machine — activation has never fired here for real. Expected on a spec repo nobody works in; a defect on a product repo.' };
+  if (hb.phase === 'started') return { state: 'FAIL', detail: `last activation (${hb.at}) started and never finished — it crashed mid-run` };
+  if (hb.state === 'BROKEN_ACTIVATION') return { state: 'FAIL', detail: `last activation reported BROKEN_ACTIVATION at ${hb.at}: a commit landed with no session heartbeat — a hook is unregistered, untrusted or dead on some machine` };
+  const wired = ['.claude/settings.json', '.codex/hooks.json', '.gemini/settings.json'].filter((f) => existsSync(join(ROOT, f)) && /SessionStart/.test(readFileSync(join(ROOT, f), 'utf8')));
+  return { state: 'PASS', detail: `simulated claude/codex/gemini all pass; last real heartbeat ${hb.at} [${hb.vendor}] state=${hb.state}${wired.length ? `; repo-level wiring present for: ${wired.join(', ')}` : '; no repo-level vendor config here (activation ships via the plugin)'}` };
 });
 
 // ------------------------------------------------------- 2. freshness sabotage
@@ -167,7 +152,8 @@ check('config', 'Does the config match reality?', () => {
 // ------------------------------------------------------------------ 6. honesty
 const CANNOT_SEE = [
   'Whether any documented sentence is TRUE. Every check here verifies structure, presence and freshness — never correctness.',
-  'Whether an injection actually reached a model. The injector is run and its output measured; that an agent then read it is unobservable from here.',
+  'Whether an injection actually reached a model. The shim is run and its output measured; that an agent then read it is unobservable from here.',
+  'Whether any vendor REGISTERED the hook. No vendor exposes an API for it; only the config file, the shim and the heartbeat trail are observable. Codex in particular binds hook trust to the shim\'s hash — a Project-OS upgrade silently disables it until a human re-trusts it in /hooks, and nothing here can see that.',
   'Whether a CHANGELOG migration works. Nothing executes an upgrade against a real older repo, so every migration step stays a claim until an adopter runs it.',
   'Anything about build caches. This runs as a plain script with no cache; a port into a caching build system must re-verify the inputs-as-a-set trap itself.',
   'Whether the spec is any good. Adoption experience arrives as a message, never as a file date.',

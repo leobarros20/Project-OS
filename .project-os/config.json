@@ -1,7 +1,6 @@
 {
   "$schema": "./config.schema.json",
   "_comment": "Project-OS per-project configuration. Every key here replaces something that would otherwise be hardcoded in a skill. Resist growing it: a key nobody changes is surface without benefit.",
-
   "tier": "solo",
   "repo": "leobarros20/Project-OS",
   "tracker": "github",
@@ -11,10 +10,9 @@
   "lanes": [],
   "docsPath": "docs/",
   "autoInject": false,
-
   "_notes": {
     "tier": "solo — one thread works this repo. The teams module (BEHAVIOR Part 7) stays inactive; lanes is empty by consequence.",
     "commitStyle": "conventional — this repo uses descriptive subjects, not the numbered NN style. Both are valid (PROJECT_OS.md Part 7 / BEHAVIOR 7.4).",
-    "autoInject": "false — the injector script exists at .claude/hooks/project-os-open.sh but is NOT registered. Registering a SessionStart hook changes every future session in this repo, which is the repo owner's decision, not an agent's. Set true only after wiring it AND observing an injection."
+    "autoInject": "false — this is the SPEC repo: nobody opens sessions here (Leo, 2026-09-07: 'yo no abro carpetas en project os'). Activation is a product shipped to ADOPTING repos (activation/), verified here by simulating each vendor (scripts/activation-test.mjs), never by registering a hook here."
   }
 }

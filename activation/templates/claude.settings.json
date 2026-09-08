@@ -1,0 +1,8 @@
+{
+  "_project-os": "v0.6 id:activation-claude — merged into .claude/settings.json by `project-os init`; matcher omitted = startup, resume and clear",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "sh .project-os/shim.sh claude", "timeout": 10 } ] }
+    ]
+  }
+}

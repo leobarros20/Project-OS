@@ -1,0 +1,8 @@
+{
+  "_project-os": "v0.6 id:activation-codex — written to .codex/hooks.json by `project-os init`. TRAP: Codex binds hook trust to the hook's hash; any Project-OS upgrade that changes shim.sh silently disables this until a human re-trusts it in /hooks. The doctor checks for it.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "sh .project-os/shim.sh codex", "timeout": 10 } ] }
+    ]
+  }
+}
