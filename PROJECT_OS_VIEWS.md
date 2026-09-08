@@ -1,6 +1,6 @@
 # PROJECT_OS_VIEWS.md
 
-**Status:** Working draft · 0.6.1
+**Status:** Working draft · 0.6.2
 **Purpose:** How to render the project map as static diagrams and the interactive viewer. This file is the rendering contract that complements the artifact contract in `PROJECT_OS.md` and the runtime contract in `PROJECT_OS_BEHAVIOR.md`.
 
 **Audience:** AI coding agents producing diagrams or building the viewer; humans reviewing what gets rendered.

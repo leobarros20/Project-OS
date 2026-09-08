@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.6.1
+**Current version:** 0.6.2
 
 This file does two jobs:
 
@@ -19,6 +19,26 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.6.2 — 2026-09-08
+
+### What changed
+
+- **New in the teams module: the studio** (`BEHAVIOR.md` 7.8). A lead delegates a whole objective to a **director** — a persistent thread on a provider that can spawn agents — who decomposes it, spawns and reuses dedicated **specialists**, consolidates, and delivers. Authority never inverts: human > lead > director > specialists. Every new team at team tier should be offered as the project's studio, with the roster proposed for the kind of project.
+- **A four-message contract with receipts** (`request` · `question` · `delivery` · `acceptance`|`correction`), immutable and id-addressed, over a file mailbox the project's own sync layer carries. A receipt means handled, never approved.
+- **Activation is the requester, never a schedule.** Sending a request triggers the director's thread synchronously through a provider adapter; a delivery wakes the lead's review through the provider's turn-complete notification. Measured: a polling heartbeat spent 66% of a director's tokens on empty wake-ups.
+- **Cross-provider authorization goes through the human, in the repo.** A director's "the owner approved" is a claim; measured, two correct agents stalled 48 hours over one. The studio never commits to the default branch.
+- **Two open items stated in the spec:** the single-writer lock a UI may hold on the director's thread (the adapter reports it, exit 2, instead of pretending), and the cost envelope of reloading the director's context per activation.
+- Shipped: `studio/bridge.py`, `studio/adapters/codex.sh` (verified on Codex CLI 0.153.2: `exec resume` drives an existing thread; native `multi_agent` tools in exec mode), registry + director-runbook templates, `/studio request|inbox|accept|correct|init`. Activation surfaces a pending director delivery at session start.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.6.2 versions.
+2. Nothing to do unless adopting a studio. To adopt: `/studio init` (registry + runbook + mailbox on the project's existing sync layer), record the director's thread id once the human has created it, propose the specialist roster for the kind of project, record the adoption as an ADR. Any prior polling automation that wakes a director is retired — activation is by request only.
+3. If a studio already exists on a bespoke bridge: map its parties to `lead`/`director`, point `bridge_root` at the existing mailbox (message and receipt formats are compatible), and switch its trigger to `send --trigger`.
+4. `JOURNAL.md` entry for the upgrade.
 
 ---
 

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "_comment": "Written by /studio init into .project-os/studio/registry.json. Thread ids are the durable identity of each party; parties are labels used in message routing. Authority never inverts: human > lead > director > specialists.",
+  "project": "<project name>",
+  "created_at": "YYYY-MM-DD",
+  "authority": "human > lead > director > specialists",
+  "bridge_root": "<absolute path on the project's existing sync layer, e.g. ~/sync/bridge/<project>/studio>",
+
+  "lead": {
+    "party": "lead",
+    "provider": "<any: claude|codex|gemini|...>",
+    "adapter": null,
+    "thread_id": null,
+    "_comment": "The lead owns the default branch and is the only merger. It is normally not driven by the bridge; its review is woken by the director's delivery (notify-hook) or by the session hint."
+  },
+  "director": {
+    "party": "director",
+    "provider": "codex",
+    "adapter": "codex",
+    "thread_id": "<director thread id>",
+    "title": "<project> studio",
+    "timeout_s": 900,
+    "_comment": "A persistent thread on a provider that can spawn agents. Receives requests, decomposes, spawns/reuses specialists, consolidates, delivers. Never commits to the default branch."
+  },
+  "specialists": [
+    { "thread_id": "<id>", "role": "<topic>", "title": "<display name>", "git": false, "territory": ["<paths this specialist may change, if git:true>"] }
+  ],
+  "activation": {
+    "mode": "event",
+    "_comment": "event = the requester triggers the director when it sends; a delivery wakes the lead. NEVER a schedule: a polling heartbeat over a large-context director is the most expensive way ever devised to ask 'anything new?' (measured: 66% of a thread's spend bought 108 output tokens)."
+  }
+}

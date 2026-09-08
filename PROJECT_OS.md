@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.6.1
+**Status:** Working draft · 0.6.2
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -81,6 +81,8 @@ docs/constants.md
 
 ```
 docs/ORCHESTRATOR.md      (the lead's board — see 3.19)
+docs/studio/director-runbook.md   (studio, when adopted — see BEHAVIOR 7.8)
+docs/studio/dispatch/             (one record per request — director-owned)
 ```
 
 ### Filled in as the project grows

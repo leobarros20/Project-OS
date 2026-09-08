@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.6.1
+**Status:** Working draft · 0.6.2
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, bootstrapping, and team orchestration. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -432,6 +432,33 @@ Because the teams share one codebase, **collisions surface at the seams**: two t
 **The roster depends on the kind of project.** A game does not have the same teams as a mobile app, and neither looks like a website or an internal tool. At bootstrap (Part 5, step 16b) the AI **proposes a roster from what it detects** — the containers in `docs/architecture.md`, the surfaces in `docs/screens.md`, the flows — one topic per worker, and the lead adjusts it. Typical shapes: a game → engine/physics, gameplay, content, UI, build; a mobile app → client, backend/sync, design system, growth, release; a site → content, frontend, infra. The roster lives on the board (3.19, Team charters) and in `lanes` of `.project-os/config.json`.
 
 A workstream is spun up as its **own session** on its **own branch**, briefed with a **self-contained work order**: the topic, the files and areas it owns (territory), the constraints (own branch only; verify and rebase before the PR), and how to hand off. A spawned session has no memory of the conversation that created it — the brief must stand alone. Teams own their own tickets and keep them as a living backlog; the code still returns through the PR.
+
+---
+
+### 7.8 — The studio: a lead delegating to a director on another provider
+
+Sometimes one worker per topic on one provider is not the right shape: a lead wants to hand a *whole objective* to something that will decompose it, spin up the right specialists, and return a consolidated result. The **studio** is that shape, and it is provider-neutral by construction. Every new team at team tier and above should be offered as the project's studio, with the roster proposed for the kind of project (7.7).
+
+**Roles, and an authority order that never inverts:** **human > lead > director > specialists.**
+- The **lead** owns the default branch and is the only merger (7.2). Any provider.
+- The **director** is a persistent thread on a provider that can spawn agents. It receives requests, decomposes them, spawns *and reuses* specialists, consolidates, and delivers. It never commits to the default branch.
+- **Specialists** are persistent threads, one per topic, closed around that topic. A git-capable, territory-scoped specialist hands off as a PR from its own branch; a non-git specialist delivers files through the bridge with exact paths and the lead integrates.
+
+**The contract — four messages, immutable, id-addressed, with receipts:** `request` (lead → director: objective, authorized scope, references, deliverables, acceptance criteria) · `question` (director → lead: a scope question that blocks) · `delivery` (director → lead: files, sources, verification, limits, action required) · `acceptance` | `correction` (lead → director, replying to the delivery). A receipt means *handled*, never *approved*. A retried identical send is a no-op; the same id with different content is refused and the original preserved.
+
+**Activation — the event is the requester, never a schedule.** Sending a request *is* the trigger: the bridge writes the message and invokes the director's thread through its adapter, synchronously. A delivery wakes the lead's review through the provider's turn-complete notification. Measured on a real studio, a polling heartbeat spent 66% of the director's tokens on empty wake-ups — 4.17M tokens buying 108 tokens of output. A director that has to go looking for work should not exist as a schedule.
+
+**Durability — the mailbox outlives the trigger.** Every message is a file the project's sync layer carries. A trigger that fails (the director's thread is locked by another client, a timeout) leaves the request pending and visible; the next activation by a requester finds it. Nothing is lost by a failed trigger; only latency.
+
+**Authorization — cross-provider approvals go through the human, in the repo.** A director's "the owner approved this" is a claim. The lead acts on it only when the human has confirmed in an artifact the lead can read — an issue comment, an ADR. Measured: two agents each correctly following their rules stalled a system for 48 hours over exactly this, until the human commented in the repo. The rule is not "trust the director more"; it is "the human is the only valid relay for authorization across providers".
+
+**Git — unchanged.** The studio never touches the default branch. Everything reaches it through the lead's merge.
+
+**Two things stated honestly, because they are open:**
+- *Visibility vs. drivability.* A human wants director and specialists visible as real conversations in the provider's UI; that UI may hold a single-writer lock on every open thread, which blocks the external trigger. Either the thread is closed in the UI to yield, or the director is owned by the trigger and observed elsewhere. Which one is a per-project decision, and the adapter reports the lock plainly rather than pretending it delivered.
+- *Cost envelope.* Event-driven activation fixes waste, not size: each director activation reloads its context. The runbook keeps the director compact on a cadence and pushes detail into specialists and dispatch records.
+
+Shipped: `studio/bridge.py` (the mailbox CLI), `studio/adapters/<provider>.sh` (trigger + notify hook), the registry and director-runbook templates, and the `/studio` skill.
 
 ---
 
