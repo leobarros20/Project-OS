@@ -1,8 +1,7 @@
 {
-  "_project-os": "v0.6 id:activation-gemini — merged into .gemini/settings.json by `project-os init`. Matcher omitted on purpose: a narrow matcher misses resume and clear. Alternative: `gemini hooks migrate --from-claude` after the Claude config is in place.",
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "sh .project-os/shim.sh gemini", "timeout": 10 } ] }
+      { "hooks": [ { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/.project-os/activate.mjs\" gemini", "timeout": 15000 } ] }
     ]
   }
 }

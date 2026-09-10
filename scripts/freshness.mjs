@@ -86,6 +86,12 @@ const versions = ['PROJECT_OS.md', 'PROJECT_OS_BEHAVIOR.md', 'PROJECT_OS_VIEWS.m
   const m = readFileSync(join(ROOT, f), 'utf8').match(/^\*\*Status:\*\*.*?·\s*([0-9.]+)/m);
   return [f, m ? m[1] : '?'];
 });
+// Every version-bearing file moves together, not just the three Status lines.
+const readV = (p, re) => { try { const m = readFileSync(join(ROOT, p), 'utf8').match(re); return m ? m[1] : '?'; } catch { return 'missing'; } };
+versions.push(['version.json', readV('version.json', /"version":\s*"([0-9.]+)"/)]);
+versions.push(['CHANGELOG.md (Current version)', readV('CHANGELOG.md', /\*\*Current version:\*\*\s*([0-9.]+)/)]);
+versions.push(['CHANGELOG.md (first entry)', readV('CHANGELOG.md', /^## ([0-9.]+) —/m)]);
+versions.push(['.claude-plugin/plugin.json', readV('.claude-plugin/plugin.json', /"version":\s*"([0-9.]+)"/)]);
 const lockstep = new Set(versions.map((v) => v[1])).size === 1;
 if (!lockstep) red.push(`spec files out of lockstep: ${versions.map((v) => `${v[0]}=${v[1]}`).join(', ')}`);
 for (const p of unclassified) red.push(`${p} — declared in PROJECT_OS.md Part 2 but UNCLASSIFIED in the manifest`);

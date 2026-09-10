@@ -1,8 +1,7 @@
 {
-  "_project-os": "v0.6 id:activation-claude — merged into .claude/settings.json by `project-os init`; matcher omitted = startup, resume and clear",
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "sh .project-os/shim.sh claude", "timeout": 10 } ] }
+      { "hooks": [ { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/.project-os/activate.mjs\" claude", "timeout": 15 } ] }
     ]
   }
 }

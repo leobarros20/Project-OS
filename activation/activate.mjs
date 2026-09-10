@@ -27,7 +27,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const VERSION = '0.6.2';
+const VERSION = '0.6.3';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.
@@ -42,6 +42,22 @@ if (!existsSync(cfgPath)) process.exit(0); // NOT_INSTALLED: silent by contract.
 const hbPath = join(root, '.project-os/heartbeat.json');
 const now = new Date();
 const iso = now.toISOString();
+
+// The vendor's hook payload on stdin: source (startup|resume|clear|compact) and
+// session id. Read best-effort; never block on it.
+let hookIn = {};
+try { const raw = readFileSync(0, 'utf8'); if (raw.trim()) hookIn = JSON.parse(raw); } catch { /* no stdin, or not JSON */ }
+const SESSION = String(hookIn.session_id || hookIn.sessionId || '');
+const SOURCE = String(hookIn.source || 'startup');
+
+// Double-fire guard: a plugin hook and an init-copied settings hook can BOTH run
+// on the same session start (Claude runs matching hooks in parallel, no dedupe).
+// One payload per session: the second activation exits quietly and records why.
+if (SESSION) {
+  const seen = join(root, '.project-os/.activated-' + SESSION.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64));
+  if (existsSync(seen)) { try { writeFileSync(seen, 'dedup'); } catch {} process.exit(0); }
+  try { mkdirSync(join(root, '.project-os'), { recursive: true }); writeFileSync(seen, iso); } catch {}
+}
 const sh = (c) => { try { return execSync(c, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(); } catch { return ''; } };
 const readJSON = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 const emit = (state, body) => {

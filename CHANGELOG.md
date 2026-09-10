@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.6.2
+**Current version:** 0.6.3
 
 This file does two jobs:
 
@@ -19,6 +19,28 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.6.3 — 2026-09-10
+
+### What changed
+
+Bug fixes to the shipped vendor templates, found by a review that loaded them into each vendor for the first time. All three templates were broken on day one; none had been exercised by its vendor, only simulated.
+
+- **Gemini template timeout was 10 milliseconds.** Gemini measures hook timeouts in ms (verified in the bundle: `Hook timed out after ${timeout}ms`); the activation takes ~3 s, so Gemini killed it every session. Now `15000`. Claude and Codex measure in seconds and stay at `15`.
+- **Codex refused the shipped hooks.json.** Its top level accepts only `description` and `hooks`; the `_project-os` marker key made Codex log an unknown-field error and load zero hooks. The marker now lives in `description`. Also corrected: Codex hook trust hashes the hooks.json *entry* (command, timeout, matcher, path), not the shim bytes — changing `activate.mjs` does not invalidate trust; and Codex *does* expose `trustStatus` via `codex app-server` → `hooks/list`. The doctor's honesty line said the opposite on both counts and now says this.
+- **The Codex `[features]` fragment could stop Codex from starting**: appended to a config that already had `[features]`, it produced a duplicate table. It is now a single key that `init` merges into an existing table, and it is documented as unnecessary on Codex CLI ≥ 0.153.2, where hooks are stable.
+- **Hook commands resolve the repo root themselves**: `node "$(git rev-parse --show-toplevel)/.project-os/activate.mjs" <vendor>`. The previous `sh .project-os/shim.sh` was cwd-relative — from a subdirectory it exited 127 with no payload, no DEGRADED, and the plugin gate read "not installed". It also removes the `sh` dependency, which Gemini on Windows (hooks via PowerShell) does not have.
+- **Double-fire guard.** Claude runs a plugin's SessionStart hook and a project's settings hook in parallel with no dedupe; a repo with both received two payloads. Activation now reads the vendor's stdin (session id, source) and emits once per session; the second run exits quietly and records `dedup`.
+- **One source of truth for the version: `version.json`** at the repo root, and the version markers in every shipped file (shim, plugin hook, templates, block, pre-push) now agree. The activation-test sentinel accepts trailing `key=value` fields and its time budget is a measured base plus a cap rather than a flat 5 s.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.6.3 versions.
+2. If `.project-os/` exists: replace the three vendor config entries with the 0.6.3 templates (root-resolved command; Gemini timeout in ms; Codex marker in `description`). If `.codex/config.toml` gained a second `[features]` table, merge it into the first. Codex users re-trust the changed entry in `/hooks` — the entry changed, so trust legitimately resets.
+3. Re-run the activation self-test from a **subdirectory** as well as the root; both must produce one payload.
+4. `JOURNAL.md` entry for the upgrade.
 
 ---
 

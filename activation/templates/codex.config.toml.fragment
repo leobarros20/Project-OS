@@ -1,3 +1,5 @@
-# project-os v0.6 id:activation-codex — appended to .codex/config.toml by `project-os init`
-[features]
+# project-os v0.6.3 — Codex feature flag. NOT NEEDED on Codex CLI >= 0.153.2, where hooks
+# are stable. On older builds, `project-os init` MERGES this key into an existing
+# [features] table; it never appends a second [features] table, which is a duplicate
+# key and stops Codex from starting in that project.
 codex_hooks = true

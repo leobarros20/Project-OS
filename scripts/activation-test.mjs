@@ -16,7 +16,9 @@ import { join } from 'node:path';
 
 const ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
 const GIT = 'git -c user.email=t@local -c user.name=t';
-const SENTINEL = /^PROJECT-OS v[\d.]+ ACTIVE \d{4}-\d\d-\d\dT[\d:.]+Z \[(\w+)\] state=([A-Z_]+)$/;
+const SENTINEL = /^PROJECT-OS v[\d.]+ ACTIVE \d{4}-\d\d-\d\dT[\d:.]+Z \[(\w+)\] state=([A-Z_]+)(?: \S+=\S+)*$/;
+const BUDGET_MS = 8000; // measured base ~2.5-3 s here; vendors kill at 15 s (15000 ms on Gemini)
+let sessionSeq = 0; // every run gets its own session id unless a case asks otherwise
 
 const clone = () => {
   const d = mkdtempSync(join(tmpdir(), 'po-act-'));
@@ -25,9 +27,9 @@ const clone = () => {
   const hb = join(d, '.project-os/heartbeat.json'); if (existsSync(hb)) unlinkSync(hb);
   return d;
 };
-const shim = (d, vendor, env = {}) => {
+const shim = (d, vendor, env = {}, session = `s-${++sessionSeq}`) => {
   const t0 = Date.now();
-  const r = spawnSync('sh', ['activation/shim.sh', vendor], { cwd: d, encoding: 'utf8', input: JSON.stringify({ session_id: 'test', hook_event_name: 'SessionStart', source: 'startup' }), env: { ...process.env, ...env } });
+  const r = spawnSync('sh', ['activation/shim.sh', vendor], { cwd: d, encoding: 'utf8', input: JSON.stringify({ session_id: session, hook_event_name: 'SessionStart', source: 'startup' }), env: { ...process.env, ...env } });
   return { code: r.status, out: r.stdout, err: r.stderr, ms: Date.now() - t0 };
 };
 const hb = (d) => { try { return JSON.parse(readFileSync(join(d, '.project-os/heartbeat.json'), 'utf8')); } catch { return null; } };
@@ -47,7 +49,7 @@ t('not installed: prints nothing, exits 0', () => {
 
 // 1. Each vendor: one payload, parses, sentinel, exit 0, under cap, under 5s, heartbeat done.
 for (const vendor of ['claude', 'codex', 'gemini']) {
-  t(`${vendor}: exactly one parseable payload with sentinel, exit 0, <5s`, () => {
+  t(`${vendor}: exactly one parseable payload with sentinel, exit 0, within budget`, () => {
     const d = clone(); try {
       const r = shim(d, vendor);
       if (r.code !== 0) return `exit ${r.code}: ${r.err.slice(0, 120)}`;
@@ -56,7 +58,7 @@ for (const vendor of ['claude', 'codex', 'gemini']) {
       if (!p.sentinelOk) return `first line is not the sentinel: ${p.ctx.split('\n')[0]}`;
       if (p.vendor !== vendor) return `sentinel vendor ${p.vendor} != ${vendor}`;
       if (p.ctx.length > 10000) return `payload ${p.ctx.length} chars exceeds Claude's 10k cap`;
-      if (r.ms > 5000) return `${r.ms}ms, over the 5s budget`;
+      if (r.ms > BUDGET_MS) return `${r.ms}ms, over the ${BUDGET_MS}ms budget`;
       const h = hb(d); if (!h || h.phase !== 'done') return `heartbeat not finalized: ${JSON.stringify(h)}`;
       if (p.state !== 'UNVERIFIED' && p.state !== 'HEALTHY' && p.state !== 'LATE') return `fresh clone should be UNVERIFIED/HEALTHY/LATE, got ${p.state}`;
       return true;
@@ -108,6 +110,16 @@ t('own crash -> one DEGRADED payload, exit 0 (silence is never legal)', () => {
     writeFileSync(join(d, '.project-os/config.json'), JSON.stringify(c));
     const r = shim(d, 'claude'); const p = parse(r.out); const h = hb(d);
     return (r.code === 0 && p.state === 'DEGRADED' && h && h.state === 'DEGRADED' && h.exit === 1) || `exit=${r.code} state=${p.state} hb=${JSON.stringify(h)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 8. Same session id fired twice (plugin + settings hook) -> exactly one payload.
+t('double-fire on one session id -> exactly one payload', () => {
+  const d = clone(); try {
+    const env = {}; const input = JSON.stringify({ session_id: 'dup-1', hook_event_name: 'SessionStart', source: 'startup' });
+    const run = () => spawnSync('sh', ['activation/shim.sh', 'claude'], { cwd: d, encoding: 'utf8', input }).stdout;
+    const a = run(); const b = run();
+    return (a.trim().length > 0 && b.trim() === '') || `first=${a.trim().length} chars, second=${b.trim().length} chars`;
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
