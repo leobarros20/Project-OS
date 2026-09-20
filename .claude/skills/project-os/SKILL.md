@@ -92,3 +92,23 @@ committing is not authorization to publish.
 - **It cannot verify migration steps actually work.** Nothing here executes a
   0.5.1 → 0.6 upgrade against a real repo. Until an adopter runs it, the
   migration is a claim.
+
+---
+
+## `/project-os init` — install activation into an adopting repo
+
+From the adopting repo's root, with the Project-OS checkout or plugin at `<project-os>`:
+
+```bash
+node <project-os>/scripts/init.mjs --dry-run   # the plan, writes nothing
+node <project-os>/scripts/init.mjs             # apply; ends with one OBSERVED injection
+```
+
+It copies the runtime into `.project-os/`, writes `config.json` defaults (never
+overwrites one), merges the SessionStart entry into each vendor config it finds
+(`--vendors claude,codex,gemini` to force; foreign hooks are kept), writes the
+static block into `AGENTS.md` and any `CLAUDE.md`/`GEMINI.md`, adds the
+gitignore lines, installs the pre-push watchdog, then fires activation from the
+root and from a subdirectory. **It refuses what it cannot own** (a foreign
+pre-push, a `core.hooksPath` it did not set, a vendor file that is not JSON)
+rather than producing a dead install. Re-running is safe.

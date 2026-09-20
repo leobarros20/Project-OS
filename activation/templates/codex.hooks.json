@@ -1,5 +1,5 @@
 {
-  "description": "project-os v0.6.3 id:activation-codex. Written to .codex/hooks.json by `project-os init`. Only `description` and `hooks` are accepted at the top level: any other key makes Codex load zero hooks. Trust is a hash over THIS entry (command, timeout, matcher, path), not over the shim bytes; changing this entry needs a human to re-trust it in /hooks, changing activate.mjs does not.",
+  "description": "project-os v0.6.4 id:activation-codex. Written to .codex/hooks.json by `project-os init`. Only `description` and `hooks` are accepted at the top level: any other key makes Codex load zero hooks. Trust is a hash over THIS entry (command, timeout, matcher, path), not over the shim bytes; changing this entry needs a human to re-trust it in /hooks, changing activate.mjs does not.",
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/.project-os/activate.mjs\" codex", "timeout": 15 } ] }

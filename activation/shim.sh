@@ -1,5 +1,5 @@
 #!/bin/sh
-# project-os v0.6.3 id:activation-shim
+# project-os v0.6.4 id:activation-shim
 # Vendor-agnostic session-start shim. Usage: shim.sh <vendor>
 #
 # The only job of this file is to make sure activate.mjs runs, and to speak if
@@ -15,10 +15,10 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || ROOT="."
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 if ! command -v node >/dev/null 2>&1; then
-  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROJECT-OS v0.6.3 ACTIVE %s [%s] state=DEGRADED\\nProject-OS is installed here but node is not on PATH, so the checker cannot run. Say so in your first reply and run the doctor."}}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$VENDOR"
+  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROJECT-OS v0.6.4 ACTIVE %s [%s] state=DEGRADED\\nProject-OS is installed here but node is not on PATH, so the checker cannot run. Say so in your first reply and run the doctor."}}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$VENDOR"
   exit 0
 fi
 
 node "$HERE/activate.mjs" "$VENDOR" 2>/dev/null || \
-  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROJECT-OS v0.6.3 ACTIVE %s [%s] state=DEGRADED\\nProject-OS activation failed to start. Run the doctor before new work."}}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$VENDOR"
+  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"PROJECT-OS v0.6.4 ACTIVE %s [%s] state=DEGRADED\\nProject-OS activation failed to start. Run the doctor before new work."}}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$VENDOR"
 exit 0

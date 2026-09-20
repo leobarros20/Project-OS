@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.6.3
+**Current version:** 0.6.4
 
 This file does two jobs:
 
@@ -19,6 +19,20 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.6.4 — 2026-09-20
+
+### What changed
+
+- **`project-os init` exists.** Six files named it; none shipped it, so every adopter hand-copied nine things. `scripts/init.mjs` (`/project-os init`) copies the runtime into `.project-os/`, writes config defaults without overwriting, merges the SessionStart entry into each vendor config it detects while keeping foreign hooks, writes the static block into `AGENTS.md` and any `CLAUDE.md`/`GEMINI.md`, adds the gitignore lines, installs the pre-push watchdog, and ends by firing activation from the root and from a subdirectory — an install that has not been observed firing is not an install. It refuses what it cannot own. `--dry-run` prints the plan and writes nothing; re-running is safe.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.6.4 versions.
+2. Any adopter still hand-installing per 0.6/5 and 0.6.3/2: run `node <project-os>/scripts/init.mjs --dry-run` from the repo root, read the plan, then run it without the flag. It reconciles an existing partial install rather than duplicating it.
+3. `JOURNAL.md` entry for the upgrade.
 
 ---
 

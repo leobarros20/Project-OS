@@ -52,10 +52,9 @@
     },
     {
       "path": "JOURNAL.md",
-      "class": "DEBT",
-      "ticket": "self-host-1",
-      "due": "2026-10-15",
-      "why": "Same gap: session history for this repo lives only in chat transcripts, which is the exact failure BEHAVIOR Part 0 forbids."
+      "class": "CALENDAR",
+      "limitDays": 30,
+      "note": "Created 2026-09-20 after 3 months as DEBT. Session-end entry; silence fails."
     },
     {
       "path": "docs/outcomes.md",
