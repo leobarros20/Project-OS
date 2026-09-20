@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.6.4
+**Current version:** 0.6.5
 
 This file does two jobs:
 
@@ -19,6 +19,25 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.6.5 — 2026-09-21
+
+### What changed
+
+- **Umbrella activation** (`BEHAVIOR.md` Part 1). Several project repos often live under one folder, and that folder is where sessions open. It is not a git repository, so a per-repo activation found no root and exited silently by contract — and a completely correct install inside every member fired **zero times**. Measured on a real three-repo umbrella: spec, manifest, status file, config and session hooks present in each member, no heartbeat ever written. Activation now looks for members when it is not itself inside an installed project: a declared `.project-os/umbrella.json`, or a **bounded one-level** scan for siblings containing `.project-os/config.json`. Each member runs **its own** activation in its own repo and keeps its own heartbeat; one payload names every member with its own state, under the vendor cap. A folder with no members stays silent. A declared member that is not installed is reported, not skipped.
+- **Hook commands survive a non-git cwd**: the templates now resolve the root with a fallback to the working directory. Without it the command expanded to an empty path on exactly the umbrella folders this release is about.. Without the fallback the command expanded to an empty path on exactly the umbrella folders this release is about.
+- **`project-os init` installs umbrellas too**: run it on the folder and it writes the dispatcher, declares the members it found, merges the vendor hooks, and self-tests for one payload naming them all. Members still need their own init.
+- **The doctor gains an umbrella check**; activation-test gains three cases (two members named in one payload, a stranger folder staying silent, a declared-but-uninstalled member raising the state).
+- **Recorded in the spec, from a real publish**: a freshly pushed version file can 404 on a raw-content CDN's negative cache for minutes while an authenticated fetch returns it. An update check must treat 404 as *keep the cached answer*, never as a broken install.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.6.5 versions.
+2. Re-run `project-os init` in each member repo to pick up the hook-command fallback (it rewrites only what changed).
+3. If sessions open on a folder holding several repos, run `project-os init` **on that folder** and commit the `.project-os/umbrella.json` it writes. Confirm one payload naming every member before calling it done.
+4. `JOURNAL.md` entry for the upgrade.
 
 ---
 

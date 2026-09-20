@@ -10,7 +10,7 @@
 // Exit 0 = every case passed · 1 = something did not behave as a vendor expects.
 
 import { execSync, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, unlinkSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -121,6 +121,70 @@ t('double-fire on one session id -> exactly one payload', () => {
     const a = run(); const b = run();
     return (a.trim().length > 0 && b.trim() === '') || `first=${a.trim().length} chars, second=${b.trim().length} chars`;
   } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 9. Umbrella: a session opened on a folder of repos, which is not a git repo.
+// A per-repo activation exits silently there, so a correct install fires zero
+// times — measured on a real three-repo umbrella. One payload must name every
+// member with its own state.
+t('umbrella with two members -> exactly one payload naming both', () => {
+  const u = mkdtempSync(join(tmpdir(), 'po-umb-'));
+  try {
+    for (const name of ['alpha', 'beta']) {
+      const d = join(u, name);
+      cpSync(ROOT, d, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
+      execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m scratch`, { cwd: d, stdio: 'pipe' });
+      const hbf = join(d, '.project-os/heartbeat.json'); if (existsSync(hbf)) unlinkSync(hbf);
+      cpSync(join(ROOT, 'activation/activate.mjs'), join(d, '.project-os/activate.mjs'));
+    }
+    const r = spawnSync(process.execPath, [join(ROOT, 'activation/activate.mjs'), 'claude'], {
+      cwd: u, encoding: 'utf8', input: JSON.stringify({ session_id: 'umb-1', source: 'startup' }),
+    });
+    if (r.status !== 0) return `exit ${r.status}`;
+    const outLines = r.stdout.trim().split('\n');
+    if (outLines.length !== 1) return `expected 1 payload line, got ${outLines.length}`;
+    const ctx = JSON.parse(r.stdout.trim()).hookSpecificOutput.additionalContext;
+    const head = ctx.split('\n')[0];
+    if (!/umbrella=2/.test(head)) return `sentinel lacks umbrella=2: ${head}`;
+    if (!/alpha/.test(ctx) || !/beta/.test(ctx)) return 'payload does not name both members';
+    if (ctx.length > 10000) return `payload ${ctx.length} chars over the cap`;
+    for (const n of ['alpha', 'beta']) {
+      if (!existsSync(join(u, n, '.project-os/heartbeat.json'))) return `${n} has no heartbeat: its own activation did not run`;
+    }
+    return true;
+  } finally { rmSync(u, { recursive: true, force: true }); }
+});
+
+// 10. A folder of non-projects stays silent: the umbrella path must not make
+// activation chatty in a stranger's directory.
+t('umbrella scan finds nothing -> silent, exit 0', () => {
+  const u = mkdtempSync(join(tmpdir(), 'po-umb-none-'));
+  try {
+    mkdirSync(join(u, 'just-a-folder'), { recursive: true });
+    const r = spawnSync(process.execPath, [join(ROOT, 'activation/activate.mjs'), 'claude'], { cwd: u, encoding: 'utf8', input: '{}' });
+    return (r.status === 0 && r.stdout.trim() === '') || `exit=${r.status} stdout=${JSON.stringify(r.stdout.slice(0, 80))}`;
+  } finally { rmSync(u, { recursive: true, force: true }); }
+});
+
+// 11. A declared member that was never installed is a finding, not a footnote.
+t('umbrella.json naming an uninstalled member -> NOT_ACTIVATED, named', () => {
+  const u = mkdtempSync(join(tmpdir(), 'po-umb-decl-'));
+  try {
+    const d = join(u, 'alpha');
+    cpSync(ROOT, d, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
+    execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m scratch`, { cwd: d, stdio: 'pipe' });
+    cpSync(join(ROOT, 'activation/activate.mjs'), join(d, '.project-os/activate.mjs'));
+    mkdirSync(join(u, '.project-os'), { recursive: true });
+    writeFileSync(join(u, '.project-os/umbrella.json'), JSON.stringify({ members: [{ name: 'alpha', path: 'alpha' }, { name: 'ghost', path: 'ghost' }] }));
+    const r = spawnSync(process.execPath, [join(ROOT, 'activation/activate.mjs'), 'codex'], {
+      cwd: u, encoding: 'utf8', input: JSON.stringify({ session_id: 'umb-2', source: 'startup' }),
+    });
+    const ctx = JSON.parse(r.stdout.trim()).hookSpecificOutput.additionalContext;
+    const head = ctx.split('\n')[0];
+    if (!/state=NOT_ACTIVATED/.test(head)) return `a declared, uninstalled member did not raise the umbrella state: ${head}`;
+    if (!/ghost/.test(ctx)) return 'the missing member is not named in the payload';
+    return true;
+  } finally { rmSync(u, { recursive: true, force: true }); }
 });
 
 // 7. Red freshness -> DOCS_STALE, and the owed list is in the payload.

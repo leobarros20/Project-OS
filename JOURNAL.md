@@ -1,5 +1,23 @@
 # Journal — Project-OS
 
+## 2026-09-21 · Project OS Team lead (Claude)
+
+### Done
+- **0.6.5: umbrella activation.** A folder holding several project repos is where sessions open, is not a git repo, and so a per-repo activation exited silently — a correct install in every member fired zero times (measured on a real three-repo umbrella). Activation now dispatches to declared or discovered members, each running its own activation in its own repo with its own heartbeat, and emits one payload naming them all. A folder with no members stays silent.
+- Hook command templates fall back to the working directory when `git rev-parse` fails; without it the command expanded to an empty path on exactly those folders.
+- `project-os init` installs umbrellas; doctor gained an umbrella check; activation-test gained three umbrella cases (13/13 green).
+- Recorded in the spec: a freshly published version file can 404 on a CDN's negative cache while an authenticated fetch returns it — an update check treats 404 as "keep the cache", never as a broken install.
+- **Published.** origin/main carries 0.6.4 and tags v0.6 through v0.6.4; raw version.json returns 200.
+
+### Known gaps, both red on purpose
+- **The doctor reports BROKEN_ACTIVATION for this repo, and it is right.** Commits land here with no session heartbeat because activation is not registered in this repo's own settings — the registration decision was deferred to the owner and is still open. The check is not narrowed to hide it; it stays red until the hook is registered or an exemption is recorded.
+- The spec-repo exemption (self-host-2/3) remains undecided; DEBT expiries 2026-11-15.
+- Update detection (activation reporting local vs canonical) is still the next feature, unstarted.
+
+### Not verified
+- Umbrella dispatch against a real multi-repo product; only scratch umbrellas were exercised here.
+- `init` against an existing `.codex/hooks.json` or `.gemini/settings.json`.
+
 Append-at-top. One entry per session that changed the repo. What was done AND what could not be verified.
 
 ## 2026-09-20 · Project OS Team lead (Claude)

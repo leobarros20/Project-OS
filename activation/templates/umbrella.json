@@ -1,0 +1,7 @@
+{
+  "_comment": "project-os v0.6.5 — place at <umbrella>/.project-os/umbrella.json when several project repos live under one folder and sessions open on that folder. Without it, activation falls back to a bounded one-level scan for sibling dirs containing .project-os/config.json. A declaration is better: it survives a rename and it says which repos a human meant.",
+  "members": [
+    { "name": "app", "path": "app" },
+    { "name": "api", "path": "api" }
+  ]
+}

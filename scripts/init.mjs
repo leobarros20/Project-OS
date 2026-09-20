@@ -21,7 +21,7 @@
 // Usage: node <project-os>/scripts/init.mjs [--dry-run] [--vendors claude,codex,gemini] [--target <repo>]
 
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, appendFileSync, chmodSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, appendFileSync, chmodSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,7 +41,40 @@ const refused = [];
 // ---------------------------------------------------------------- pre-flight
 let root;
 try { root = execSync('git rev-parse --show-toplevel', { cwd: TARGET, encoding: 'utf8', stdio: 'pipe' }).trim(); }
-catch { say('not a git repository: ' + TARGET); process.exit(2); }
+catch {
+  // Not a git repo. It may be an UMBRELLA: the folder several project repos sit
+  // under, and the folder sessions actually open on. Installing there is what
+  // stops a correct per-repo install from firing zero times.
+  const members = (() => { try { return readdirSync(TARGET, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith('.') && existsSync(join(TARGET, e.name, '.project-os/config.json'))).map((e) => e.name); } catch { return []; } })();
+  if (!members.length) { say(`not a git repository, and no member repos with .project-os/config.json under it: ${TARGET}`); process.exit(2); }
+  say(`Project-OS init → UMBRELLA ${TARGET}${DRY ? '  (dry run, nothing written)' : ''}`);
+  say(`  members: ${members.join(', ')}`);
+  const wrU = (rel, content) => { if (!DRY) { mkdirSync(dirname(join(TARGET, rel)), { recursive: true }); writeFileSync(join(TARGET, rel), content); } };
+  const actSrc = join(SRC, 'activation/activate.mjs');
+  if (!DRY) { mkdirSync(join(TARGET, '.project-os'), { recursive: true }); copyFileSync(actSrc, join(TARGET, '.project-os/activate.mjs')); }
+  say(`${DRY ? '[dry-run] would' : '  ✓'} write .project-os/activate.mjs (the umbrella dispatcher)`);
+  const declPath = join(TARGET, '.project-os/umbrella.json');
+  if (existsSync(declPath)) say('  = .project-os/umbrella.json exists, not touched');
+  else { say(`${DRY ? '[dry-run] would' : '  ✓'} write .project-os/umbrella.json declaring ${members.length} member(s)`); wrU('.project-os/umbrella.json', JSON.stringify({ _comment: 'Members of this umbrella. A declaration survives a rename and says which repos a human meant; without it activation falls back to a one-level scan.', members: members.map((m) => ({ name: m, path: m })) }, null, 2) + '\n'); }
+  for (const [v, t] of Object.entries({ claude: '.claude/settings.json', codex: '.codex/hooks.json', gemini: '.gemini/settings.json' })) {
+    if (!existsSync(join(TARGET, `.${v}`)) && !(opt('--vendors') || '').includes(v)) continue;
+    const tpl = JSON.parse(readFileSync(join(SRC, 'activation/templates', v === 'claude' ? 'claude.settings.json' : v === 'codex' ? 'codex.hooks.json' : 'gemini.settings.json'), 'utf8'));
+    let cur = existsSync(join(TARGET, t)) ? JSON.parse(readFileSync(join(TARGET, t), 'utf8')) : {};
+    cur.hooks = cur.hooks || {}; cur.hooks.SessionStart = cur.hooks.SessionStart || [];
+    if (cur.hooks.SessionStart.some((g) => (g.hooks || []).some((h) => /activate\.mjs/.test(h.command || '')))) { say(`  = ${t} already has the activation hook`); continue; }
+    cur.hooks.SessionStart.push(tpl.hooks.SessionStart[0]);
+    say(`${DRY ? '[dry-run] would' : '  ✓'} merge SessionStart hook into ${t}`); wrU(t, JSON.stringify(cur, null, 2) + '\n');
+  }
+  if (DRY) { say('\nRun without --dry-run to apply. Each member repo still needs its own init.'); process.exit(0); }
+  const r = spawnSync(process.execPath, [join(TARGET, '.project-os/activate.mjs'), 'init-selftest'], { cwd: TARGET, encoding: 'utf8', input: JSON.stringify({ session_id: `init-umb-${Date.now()}`, source: 'startup' }) });
+  let head = null; try { head = JSON.parse(r.stdout.trim()).hookSpecificOutput.additionalContext.split('\n')[0]; } catch { /* none */ }
+  say('\nSelf-test — one payload naming every member:');
+  say(`  ${head && /umbrella=/.test(head) ? 'OK   ' + head : 'FAIL ' + (head || `exit ${r.status}, no payload`)}`);
+  say(head && /umbrella=/.test(head)
+    ? '\nUmbrella installed and OBSERVED. Each member repo still needs its own init (run this from inside each one).'
+    : '\nNOT a working umbrella install. Fix and re-run; re-running is safe.');
+  process.exit(head && /umbrella=/.test(head) ? 0 : 1);
+}
 say(`Project-OS init → ${root}${DRY ? '  (dry run, nothing written)' : ''}`);
 const version = JSON.parse(readFileSync(join(SRC, 'version.json'), 'utf8')).version;
 say(`  tooling ${version} from ${SRC}`);

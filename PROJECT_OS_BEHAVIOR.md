@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.6.4
+**Status:** Working draft · 0.6.5
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, bootstrapping, and team orchestration. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -33,11 +33,14 @@ What never rotted, anywhere: the artifact a check rewrites on every run. So as o
 2. **The generated status file.** The same check **emits** `docs/project-os-status.md` (`PROJECT_OS.md` 3.21). Agents read state there — one file, always current — and never derive it by comparing file dates.
 3. **The invocable skill — that injects itself.** The protocol ships as a `project-os` skill with an **open** phase and a **close** phase, discoverable automatically by every agent on the repo. But a protocol that must be *remembered* is a protocol that lapses: measured on one product, 4 of 10 sessions delivered work having never opened the skill, while its closing gate was healthy — the two halves were failing differently, and only measurement showed which. So where the agent platform supports it, a **session-start hook injects the generated status file and the closing obligations into every session automatically**, hoisting anything LAPSED / MISSING / PAST DUE. The skill remains the full protocol; the hook only guarantees nobody starts blind. Where no hook mechanism exists, the repo's agent-config file points at the skill as the first instruction — weaker, and known to be weaker.
 
+**Umbrellas — where sessions actually open.** Several project repos often live under one folder, and that folder is where sessions open. It is not a git repository, so a per-repo activation finds no root and exits silently by contract — and a completely correct install inside every member fires zero times. Measured on a real three-repo umbrella: spec, manifest, status file, config and session hooks all present in each member, and no heartbeat had ever been written. So: when activation runs somewhere that is not itself an installed project, it looks for members — a declared `.project-os/umbrella.json` naming them, or a **bounded one-level** scan for sibling directories containing `.project-os/config.json` — runs **each member's own activation in its own repo**, and emits **one** payload naming every member with its own state. Each member keeps its own heartbeat; the umbrella fakes nobody's verdict. A folder with no members stays silent, because silence is right for a stranger's folder and wrong only for a project's own home. A declared member that is not installed is reported as a finding, not skipped.
+
 **Three traps, part of the contract:**
 
 - **Declare the checker's inputs as a set, not file by file.** File-by-file inputs let a stale result serve a cached green — the same narrowness one layer down, in the thing built to stop narrowness. Verify by aging a doc and confirming red *without* a forced rerun.
 - **State what the check cannot verify.** These gates verify that a dated heading exists, never that it says anything true; a stricter check would only raise the incentive to satisfy its letter. Each project's check and its status file carry an explicit "what this check cannot see" statement.
 - **An injector with nothing to inject fails silently.** A session-start hook whose status artifact is missing exits quietly and injects nothing — the install looks done and does nothing. Installation is complete only when an **observed injection** has been confirmed in a real session, with a deliberately reddened row proving the content is live.
+- **A freshly published version file can 404 on a CDN's negative cache.** After a release is pushed, a raw-content CDN may keep serving 404 for the canonical version file for minutes while an authenticated fetch returns it. Any update check must treat 404 as *keep the cached answer*, never as "the project is gone" or "the install is broken" — observed on a real publish.
 
 Two more rules keep the mechanism honest:
 

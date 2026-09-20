@@ -149,7 +149,26 @@ check('config', 'Does the config match reality?', () => {
     : { state: 'PASS', detail: `tier=${cfg.tier} · verify runs green · repo and tracker resolve` };
 });
 
-// ------------------------------------------------------------- 6. the watchdog
+// -------------------------------------------------------------- 6. umbrella
+// A folder of repos is where sessions open, and it is not a git repo, so a
+// per-repo activation exits silently there. Measured on a real three-repo
+// umbrella: every member installed correctly, activation had fired zero times.
+check('umbrella', 'If this is an umbrella, does it dispatch to its members?', () => {
+  const decl = join(ROOT, '.project-os/umbrella.json');
+  const dispatcher = join(ROOT, '.project-os/activate.mjs');
+  
+  if (!existsSync(decl)) return { state: 'SKIP', detail: 'no .project-os/umbrella.json — this is a single repo, not an umbrella' };
+  if (!existsSync(dispatcher)) return { state: 'FAIL', detail: 'umbrella.json declares members but .project-os/activate.mjs is missing — nothing would dispatch' };
+  const members = (JSON.parse(readFileSync(decl, 'utf8')).members || []).map((m) => (typeof m === 'string' ? { name: m, path: m } : m));
+  const missing = members.filter((m) => !existsSync(join(ROOT, m.path, '.project-os/config.json')));
+  const r = quiet(`node "${dispatcher}" doctor`);
+  const head = (() => { try { return JSON.parse(r.out.trim()).hookSpecificOutput.additionalContext.split('\n')[0]; } catch { return ''; } })();
+  if (!/umbrella=/.test(head)) return { state: 'FAIL', detail: `the dispatcher produced no umbrella payload: ${head || r.out.slice(0, 120)}` };
+  if (missing.length) return { state: 'FAIL', detail: `declared but not installed: ${missing.map((m) => m.name || m.path).join(', ')} — run project-os init in each` };
+  return { state: 'PASS', detail: `${members.length} member(s) declared and installed; dispatcher emits: ${head}` };
+});
+
+// ------------------------------------------------------------- 7. the watchdog
 // The out-of-band witness must itself be witnessed. Commit-relative, never
 // wall-clock: a quiet repo with an old ledger is fine; commits with no ledger
 // row behind them mean the watchdog stopped — the one failure nothing else sees.

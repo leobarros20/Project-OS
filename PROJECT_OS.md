@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.6.4
+**Status:** Working draft · 0.6.5
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.

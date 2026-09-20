@@ -5,3 +5,4 @@ Append-only. One row per out-of-band watchdog run (pre-push, scheduled, manual, 
 | When (UTC) | Source | HEAD | State | Detail |
 |---|---|---|---|---|
 | 2026-09-08T05:02:04.320Z | manual | e40daf3 | GREEN | ok |
+| 2026-09-20T23:41:56.848Z | manual | 12ff8a3 | RED | trail: last activation reported BROKEN_ACTIVATION; trail: commits landed more than 7 days after the last ledger row (2026-09-08) — the watchdog itself was not running |

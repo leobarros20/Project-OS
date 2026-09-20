@@ -1,7 +1,15 @@
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/.project-os/activate.mjs\" claude", "timeout": 15 } ] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.project-os/activate.mjs\" claude",
+            "timeout": 15
+          }
+        ]
+      }
     ]
   }
 }
