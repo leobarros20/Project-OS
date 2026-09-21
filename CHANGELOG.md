@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.6.5
+**Current version:** 0.7
 
 This file does two jobs:
 
@@ -22,12 +22,34 @@ This file does two jobs:
 
 ---
 
+## 0.7 — 2026-09-21
+
+### What changed
+
+**The workbench: one directory where writing is allowed to be wrong** (`PROJECT_OS.md` 3.22). `docs/` is the map — maintained, freshness-checked, obliged to be true. Nothing in the OS was a place for explorations, references, drafts, notes from a conversation, or material imported from outside. That material had two fates and both were bad: it bloated `docs/`, where the protocol correctly policed it into stale and red, or it stayed in a chat window and was lost.
+
+- **Not a source of truth, and that is the clause that fails.** An agent may read it for context, must never cite it as fact, and must never update `docs/`, a manifest or a decision record from it without confirming with the owner. Stated in the spec, in the `BEHAVIOR.md` cadence, and again in the directory's own README — because an agent that skipped the spec still meets it there.
+- **Exempt from freshness by construction, not by an exemption row.** The check excludes the directory as a class: no file under it is ever CALENDAR or DEBT, its age is never a finding, and adding a note never turns a build red. This is the one exception to the Part 2 rule that every declared artifact carries a class. Verified both ways: a real unclassified artifact still goes red, and a new note does not.
+- **Every note carries a date; nobody is ever obliged to update one.** A stale note is working as intended.
+- **Promotion is the exit**, via the new `/promote` skill: the note becomes a decision record, a `docs/` artifact or a tracker issue; it is rewritten rather than pasted; it is classified in the same change if the manifest tracks it; and the note stays where it is with one line saying where it went, so the trail survives. Promotion always confirms with the owner first — an agent quietly turning a draft into a decision is the exact failure the workbench exists to prevent.
+- **Not a dumping ground** (a decision goes in decisions, a session record in the journal, a specification in `docs/`), and **weight matters**: binaries are allowed, but past a few megabytes the material belongs outside the repo. Observed in practice at 11 MB and 8 MB in two real projects, both past that line.
+- **The name is configurable** (`notesPath` in `.project-os/config.json`, default `notes/`), so a team working in another language is not forced into English. `init` creates the directory with its README.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7 versions.
+2. Run `project-os init`: it creates the workbench with its README and adds `notesPath` to a config that lacks it. Or create it by hand from the 3.22 template.
+3. If material nobody maintains is sitting in `docs/` — imported exports, references, drafts — move it into the workbench and drop its manifest rows. It stops being a freshness finding the moment it moves.
+4. `JOURNAL.md` entry for the upgrade.
+
+---
+
 ## 0.6.5 — 2026-09-21
 
 ### What changed
 
 - **Umbrella activation** (`BEHAVIOR.md` Part 1). Several project repos often live under one folder, and that folder is where sessions open. It is not a git repository, so a per-repo activation found no root and exited silently by contract — and a completely correct install inside every member fired **zero times**. Measured on a real three-repo umbrella: spec, manifest, status file, config and session hooks present in each member, no heartbeat ever written. Activation now looks for members when it is not itself inside an installed project: a declared `.project-os/umbrella.json`, or a **bounded one-level** scan for siblings containing `.project-os/config.json`. Each member runs **its own** activation in its own repo and keeps its own heartbeat; one payload names every member with its own state, under the vendor cap. A folder with no members stays silent. A declared member that is not installed is reported, not skipped.
-- **Hook commands survive a non-git cwd**: the templates now resolve the root with a fallback to the working directory. Without it the command expanded to an empty path on exactly the umbrella folders this release is about.. Without the fallback the command expanded to an empty path on exactly the umbrella folders this release is about.
+- **Hook commands survive a non-git cwd**: the templates now resolve the root with a fallback to the working directory. Without it the command expanded to an empty path on exactly the umbrella folders this release is about.
 - **`project-os init` installs umbrellas too**: run it on the folder and it writes the dispatcher, declares the members it found, merges the vendor hooks, and self-tests for one payload naming them all. Members still need their own init.
 - **The doctor gains an umbrella check**; activation-test gains three cases (two members named in one payload, a stranger folder staying silent, a declared-but-uninstalled member raising the state).
 - **Recorded in the spec, from a real publish**: a freshly pushed version file can 404 on a raw-content CDN's negative cache for minutes while an authenticated fetch returns it. An update check must treat 404 as *keep the cached answer*, never as a broken install.

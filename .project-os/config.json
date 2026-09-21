@@ -9,6 +9,7 @@
   "owner": "Leo",
   "lanes": [],
   "docsPath": "docs/",
+  "notesPath": "notes/",
   "autoInject": false,
   "_notes": {
     "tier": "solo — one thread works this repo. The teams module (BEHAVIOR Part 7) stays inactive; lanes is empty by consequence.",

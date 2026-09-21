@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.6.5
+**Status:** Working draft · 0.7
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -140,6 +140,16 @@ docs/conventions.md       (working agreement / agent manifesto — see 3.20)
 
 Each is adopted by a recorded decision, not by default. If adopted, each carries a freshness classification like every other artifact (see below).
 
+### The workbench — where writing is allowed to be wrong
+
+```
+notes/                    (name configurable: `notesPath` — see 3.22)
+  README.md               (the contract, restated where people will read it)
+  ...                     (explorations, references, drafts, imported material)
+```
+
+Created on day one, next to the map. **Nothing under it is a source of truth**, and nothing under it is ever a freshness finding. See 3.22.
+
 ### Optional — Conversation history
 
 ```
@@ -169,6 +179,8 @@ An artifact whose update cadence is "manual, periodic" will die — the field ev
 - **CALENDAR** — must be written on a cadence; silence is the failure.
 - **DEBT** — known stale, with a ticket **and an expiry date**. Past the date it is red regardless of contents; an open-ended exemption is how debt becomes permanent.
 - **DESCRIPTIVE** — changes only when its subject changes, so age is not evidence of rot. Each entry records *why* it is trusted, so trust is a decision rather than an oversight.
+
+**One directory is excluded as a class, not row by row.** The workbench (3.22) holds material nobody is obliged to maintain, so no file under it is ever CALENDAR or DEBT and its age is never a finding. The freshness check excludes the whole directory by construction — an adopter never writes a manifest line per note, and adding a note never turns a build red. This is the single exception to "every artifact the spec declares carries a class", and it exists because the alternative is worse: material that matters ends up in `docs/`, where the protocol correctly polices it, it goes stale, and the red is noise.
 
 Generated artifacts (`docs/diagrams/`, `docs/viewer/`, `docs/project-os-status.md`, status dashboards) are build outputs, never maintained files — the only artifact that never rots is the one a check rewrites on every run. Their emitter owns their freshness; while an emitter is not yet wired, the artifact is carried as DEBT (ticketed, expiring), never as a silent lapse.
 
@@ -1156,6 +1168,43 @@ Reference point: newest substantive commit, **YYYY-MM-DD**.
 
 - Anything marked LAPSED, MISSING, or PAST DUE is work the current session owes before it finishes — not a note for someone else. Say so in the first message of the session rather than discovering it at commit time.
 - The **"What a test cannot see"** section is mandatory: the check states its own ceiling (see the two traps in `BEHAVIOR.md` Part 1).
+
+---
+
+### 3.22 — notes/ (the workbench)
+
+**Purpose:** the one place in the repo where writing is allowed to be wrong. Explorations, references, a link someone shared, a draft of an idea, notes from a conversation, material imported from outside. `docs/` is the map — maintained, freshness-checked, obliged to be true. This is the workbench next to it.
+
+**Why it exists.** Without it, that material has two fates and both are bad: it bloats `docs/`, where the protocol correctly polices it and it goes stale and red; or it stays in a chat window and disappears. A repo needs somewhere thinking can land without being mistaken for a decision.
+
+**Name:** `notes/` by default, configurable as `notesPath` in `.project-os/config.json`, because a team that works in another language should not be forced into English.
+
+**The contract — six clauses, and the first one is the one that fails:**
+
+1. **Not a source of truth.** An agent may read it for context, must **never cite it as fact**, and must never update `docs/`, a manifest, or a decision record from it without confirming with the owner. The failure mode is an agent reading a draft and treating it as a decision, so this is stated in the spec *and* again in the directory's own README, where an agent that skipped the spec will still meet it.
+2. **Exempt from freshness by construction.** No file under it is CALENDAR or DEBT; its age is never a finding; the check excludes the directory as a class rather than by a manifest row per note (see the freshness rule in Part 2).
+3. **Every note carries a date, and nobody is ever obliged to update one.** The date says when it was true for its author. Staleness is expected, not a defect.
+4. **Promotion is the exit.** A note that matures becomes a decision record, a `docs/` artifact, or a tracker issue. The note stays where it is with one line saying where it went, so the trail survives.
+5. **Not a dumping ground.** A decision belongs in decisions; a session record belongs in the journal; a specification belongs in `docs/`. This directory holds what has no other home *yet*.
+6. **Weight.** Binaries are allowed, and a few megabytes is the point where the material belongs outside the repo instead. Observed in practice: one project's imported brand assets reached 11 MB and another's art 8 MB, which is past that line.
+
+~~~markdown
+# Notes
+
+The workbench. `docs/` is the map and must be true; this is where thinking is
+allowed to be wrong.
+
+**Nothing here is a source of truth.** Read it for context. Never cite it as
+fact. Never update `docs/`, a manifest or a decision record from it without
+confirming with the owner first.
+
+Every note starts with a date. Nobody has to update one, ever — a stale note is
+working as intended. When a note matures, promote it (a decision record, a
+`docs/` artifact, an issue) and leave one line here saying where it went.
+
+Not a dumping ground: a decision goes in decisions, a session record in the
+journal, a specification in `docs/`. This holds what has no other home yet.
+~~~
 
 ---
 

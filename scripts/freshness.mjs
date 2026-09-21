@@ -26,6 +26,19 @@ const manifest = JSON.parse(readFileSync(join(ROOT, 'project-os-manifest.json'),
 const classified = new Map(manifest.artifacts.map((a) => [a.path, a]));
 const exempt = new Set((manifest.exempt || []).map((e) => e.path));
 
+// The workbench (PROJECT_OS.md 3.22) is excluded as a CLASS, not row by row: no
+// file under it is ever CALENDAR or DEBT, its age is never a finding, and adding
+// a note must never turn a build red. This is the one exception to "every
+// declared artifact carries a class", and it is what keeps material nobody will
+// maintain out of docs/, where the protocol would correctly police it into red.
+const notesPath = (() => {
+  try {
+    const p = JSON.parse(readFileSync(join(ROOT, '.project-os/config.json'), 'utf8')).notesPath || 'notes/';
+    return p.endsWith('/') ? p : p + '/';
+  } catch { return 'notes/'; }
+})();
+const inWorkbench = (p) => p === notesPath.slice(0, -1) || p.startsWith(notesPath);
+
 // --- Enumerate what the spec itself declares (the self-incompleteness check) ---
 const spec = readFileSync(join(ROOT, 'PROJECT_OS.md'), 'utf8');
 const part2 = spec.slice(spec.indexOf('## Part 2'), spec.indexOf('## Part 3'));
@@ -50,7 +63,7 @@ for (const block of part2.match(/```[\s\S]*?```/g) || []) {
   }
 }
 
-const unclassified = [...declared].filter((p) => !classified.has(p) && !exempt.has(p));
+const unclassified = [...declared].filter((p) => !classified.has(p) && !exempt.has(p) && !inWorkbench(p));
 
 // --- Evaluate each classified artifact ---
 const rows = { CALENDAR: [], DEBT: [], DESCRIPTIVE: [], GENERATED: [] };
@@ -131,6 +144,12 @@ Age is not evidence of rot for these. Moving an artifact here to quiet a failure
 is the abuse this design guards against, so each carries its reason.
 
 ${t(['Artifact', 'Last touched', 'Why it is trusted'], rows.DESCRIPTIVE)}
+## The workbench
+
+Everything under \`${notesPath}\` is excluded as a class: nothing there is
+maintained, its age is never a finding, and adding a note never turns this red.
+See \`PROJECT_OS.md\` 3.22.
+
 ## What this check cannot see
 
 - **Whether any of it is true.** It verifies that files exist and were touched,

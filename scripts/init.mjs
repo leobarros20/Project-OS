@@ -101,10 +101,21 @@ else {
     $schema: 'https://raw.githubusercontent.com/leobarros20/Project-OS/main/.project-os/config.schema.json',
     tier: 'solo', repo: (() => { try { const u = execSync('git remote get-url origin', { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(); const m = u.match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?$/); return m ? m[1] : ''; } catch { return ''; } })(),
     tracker: 'github', verify: 'echo "set the verify command in .project-os/config.json"', commitStyle: 'conventional',
-    owner: '', lanes: [], docsPath: 'docs/', autoInject: true,
+    owner: '', lanes: [], docsPath: 'docs/', notesPath: 'notes/', autoInject: true,
     _note: `written by project-os init ${version}; detected vendors: ${vendorsHint.join(', ') || 'none'}. Set verify to the command that must pass before a handoff.`,
   };
   did('write .project-os/config.json (defaults; edit verify, tier, owner)'); wr('.project-os/config.json', JSON.stringify(cfg, null, 2) + '\n');
+}
+
+// ------------------------------------------------------------ 2b. workbench
+// The one directory where writing is allowed to be wrong (PROJECT_OS.md 3.22).
+// Created on day one: a repo without it puts that material in docs/, where the
+// protocol correctly polices it into red, or in a chat window, where it is lost.
+{
+  const notes = ((readJSON(cfgPath) || {}).notesPath || 'notes/').replace(/\/?$/, '/');
+  const readme = join(root, notes, 'README.md');
+  if (existsSync(readme)) say(`  = ${notes}README.md exists, not touched`);
+  else { did(`create ${notes} with its README (the workbench — nothing under it is a source of truth)`); wr(notes + 'README.md', readFileSync(join(SRC, 'activation/templates/notes-README.md'), 'utf8')); }
 }
 
 // ------------------------------------------------- 3. vendor session hooks

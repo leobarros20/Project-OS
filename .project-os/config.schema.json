@@ -39,6 +39,10 @@
       "type": "string",
       "description": "Where the artifact set lives. Some projects use documentation/ or an external wiki."
     },
+    "notesPath": {
+      "type": "string",
+      "description": "The workbench (PROJECT_OS.md 3.22): the one directory where writing is allowed to be wrong. Excluded from freshness as a class — no file under it is ever a finding. Default notes/; set any name, e.g. notas/, so a team is not forced into English."
+    },
     "autoInject": {
       "type": "boolean",
       "description": "Whether the SessionStart injector is active. True asserts it is registered AND an injection has been observed — presence is not registration."

@@ -1,4 +1,4 @@
-# project-os v0.6.5 — Codex feature flag. NOT NEEDED on Codex CLI >= 0.153.2, where hooks
+# project-os v0.7 — Codex feature flag. NOT NEEDED on Codex CLI >= 0.153.2, where hooks
 # are stable. On older builds, `project-os init` MERGES this key into an existing
 # [features] table; it never appends a second [features] table, which is a duplicate
 # key and stops Codex from starting in that project.

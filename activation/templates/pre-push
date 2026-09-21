@@ -1,5 +1,5 @@
 #!/bin/sh
-# project-os v0.6.5 id:watchdog-pre-push
+# project-os v0.7 id:watchdog-pre-push
 # The PRIMARY out-of-band witness: runs install integrity, freshness and the
 # activation trail before every push leaves this machine. Blocks the push on
 # red. Installed by `project-os init` into .git/hooks/ (or the repo's

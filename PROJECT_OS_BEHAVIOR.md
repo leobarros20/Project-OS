@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.6.5
+**Status:** Working draft · 0.7
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, bootstrapping, and team orchestration. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -143,6 +143,8 @@ The AI updates artifacts continuously, in the background. It does NOT pause to a
 - **After every code change that touches structure:** update `docs/architecture.md` if a container, external dependency, or runtime topology changed; update the relevant `docs/components/NN-*.md` if a component's responsibility, public surface, or call graph changed; update `docs/screens.md` if a screen changed, the relevant feature spec if scope shifted, `docs/data-model.md` if an entity changed, `docs/permissions.md` or `docs/integrations.md` if external surface changed, `docs/telemetry.md` if events changed, `docs/contexts.md` if module ownership changed, `docs/flows.md` if a flow's steps changed. Regenerate the affected `docs/diagrams/c4-*.md` (containers, components, code) views.
 - **After any change to a config file, `.env` example, theme file, or physics/constants module:** sync `docs/constants.md` — update changed values, add new constants, mark removed ones as retired.
 - **When the viewer queues a proposed constants change:** it writes a journal-formatted block to the next JOURNAL.md entry. The AI reads it, applies the value to the Source file, and confirms in the same journal entry. This is how a non-programmer's slider move becomes a real code change.
+- **When material arrives that has no home yet** — an exploration, a reference, a link, a draft, notes from a conversation — put it in the workbench (`PROJECT_OS.md` 3.22), dated, and leave it alone. Do not file it into `docs/` to make it look maintained: `docs/` is obliged to be true, and material nobody will maintain does not belong there.
+- **Reading the workbench:** read it for context freely. **Never cite it as fact, and never update `docs/`, a manifest or a decision record from it without confirming with the user first.** A draft is not a decision, and the failure this rule exists to stop is an agent reading one and quietly promoting it into the map. When a note looks like it should change the map, say so and ask — that is a Mode 2 question, not a silent update.
 - **After a meaningful decision is made:** draft a decision doc with status `Proposed`. Pull the alternatives section from the active conversation.
 - **When the user implies a value or constraint:** ask one short Mode 2 clarification (see Part 2), then tag the captured value onto the affected outcome or context.
 - **Every couple of hours of active work:** append a checkpoint entry to `JOURNAL.md`.

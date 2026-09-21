@@ -1,5 +1,19 @@
 # Journal — Project-OS
 
+## 2026-09-21 (later) · Project OS Team lead (Claude)
+
+### Done
+- **0.7: the workbench.** New section 3.22: one directory where writing is allowed to be wrong — explorations, references, drafts, imported material. Nothing under it is a source of truth; an agent reads it for context, never cites it as fact, and never updates docs/ or a decision record from it without confirming. Excluded from freshness **as a class**, which is the one exception to the Part 2 rule that every declared artifact carries a class.
+- Name configurable via notesPath (default notes/); init creates it with its README; new /promote skill takes a matured note into a decision record, a docs/ artifact or an issue and stamps the note with where it went.
+- Verified both directions: a real unclassified artifact still goes red, and adding a note does not.
+
+### Closed from the previous entry
+- The two reds (BROKEN_ACTIVATION, watchdog) are closed by running activation as a **session-close ritual**, which is the weaker path the spec sanctions where no hook is registered — not by narrowing any check. The heartbeat records origin=session-close, so the trail says honestly how it fired. Registering the hook here is still the owner's open decision, and until then this ritual has to be run by hand every session, which is exactly the failure mode 0.6 was written about.
+
+### Not verified
+- The workbench against a real adopter migration (moving unmaintained material out of docs/).
+- /promote end to end; it is deliberately manual and needs a real note.
+
 ## 2026-09-21 · Project OS Team lead (Claude)
 
 ### Done
