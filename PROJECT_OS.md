@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.7
+**Status:** Working draft · 0.7.1
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -1187,6 +1187,13 @@ Reference point: newest substantive commit, **YYYY-MM-DD**.
 4. **Promotion is the exit.** A note that matures becomes a decision record, a `docs/` artifact, or a tracker issue. The note stays where it is with one line saying where it went, so the trail survives.
 5. **Not a dumping ground.** A decision belongs in decisions; a session record belongs in the journal; a specification belongs in `docs/`. This directory holds what has no other home *yet*.
 6. **Weight.** Binaries are allowed, and a few megabytes is the point where the material belongs outside the repo instead. Observed in practice: one project's imported brand assets reached 11 MB and another's art 8 MB, which is past that line.
+
+**Importing from another tool — the handover is seamless or it is not done.** Material brought in from a wiki, a notes app, or any other system **writes flat into the workbench**, exactly where a note written by hand would go. It does **not** get a folder named after the tool it came from. Two consequences:
+
+- **Provenance lives in frontmatter, never in a path.** A note that came from elsewhere carries its source identifiers and export date at the top of the file (a source URL, a source id, the date it was exported). That is what makes it traceable; a folder name would only make it segregated.
+- **Sub-folders mirror the source's own hierarchy, and only when the source had one.** A wiki with a real tree keeps that tree. A flat export stays flat. The shape of the material decides, not the tool that produced it.
+
+The reason is the point of the whole directory: once imported, that material is just notes. A folder named after the exporter tells every future reader that this is somebody else's stuff living here on sufferance, which is exactly the opposite of a handover. Six months later nobody should have to know where a note came from to use it — and if they do care, the frontmatter says.
 
 ~~~markdown
 # Notes

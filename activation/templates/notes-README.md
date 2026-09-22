@@ -24,3 +24,10 @@ the journal. A specification goes in `docs/`. This holds what has no other home
 
 **Weight:** binaries are fine, but past a few megabytes the material belongs
 outside the repo instead.
+
+**Material imported from another tool lands here flat**, in the same place a
+note written by hand would go — never in a folder named after the tool it came
+from. Its origin lives in its frontmatter (a source URL, a source id, the export
+date), not in its path. Sub-folders mirror the source's own hierarchy, and only
+when the source had one. Once it is here, it is just notes: nobody should need
+to know where a note came from in order to use it.

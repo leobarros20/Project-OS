@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7
+**Current version:** 0.7.1
 
 This file does two jobs:
 
@@ -19,6 +19,21 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.7.1 — 2026-09-22
+
+### What changed
+
+- **Importing into the workbench is seamless or it is not done** (`PROJECT_OS.md` 3.22). Material brought in from a wiki or a notes app writes **flat**, exactly where a hand-written note would go, and never into a folder named after the tool it came from. Provenance lives in the note's **frontmatter** (source URL, source id, export date), never in a path. Sub-folders mirror the source's own hierarchy, and only when the source had one. The reason is the point of the directory: once imported, that material is just notes, and a folder named after the exporter tells every future reader it is somebody else's stuff living here on sufferance. Six months later nobody should need to know where a note came from in order to use it — and if they do care, the frontmatter says. The workbench README carries the same rule.
+
+- **Activation can no longer hang on stdin.** `readFileSync(0)` blocks until EOF, so a hand-run with a terminal on stdin never returned — and a session-start hook that hangs emits no payload, which is silence, the one illegal outcome. It now skips the read when stdin is a terminal. Every vendor closes stdin after writing its event, so the shipped path was never affected; this was found by hanging exactly that way in a wrapper. Residual limit, stated rather than hidden: an inherited pipe that stays open still blocks a synchronous read, so a manual run inside a wrapper should redirect from /dev/null.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.1 versions; re-run `project-os init` to refresh the workbench README.
+2. If imported material sits under a folder named after its source tool, move it up into the workbench root (keeping any sub-tree the source itself had) and confirm each file carries its provenance in frontmatter. If it does not, add it before moving — the frontmatter is what replaces the folder.
 
 ---
 

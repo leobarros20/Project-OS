@@ -27,7 +27,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const VERSION = '0.7';
+const VERSION = '0.7.1';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.
@@ -43,8 +43,20 @@ const iso = now.toISOString();
 // The vendor's hook payload on stdin: source (startup|resume|clear|compact) and
 // session id. Read best-effort; never block on it. Read BEFORE any branch, so
 // the umbrella path can hand the same stdin to each member.
+// NEVER read stdin when it is a terminal: readFileSync(0) blocks until EOF, and
+// a session-start hook that hangs emits no payload — silence, the one illegal
+// outcome. Every vendor closes stdin after writing the event, so the shipped
+// path is unaffected; this guards the hand-run case. Residual limit, stated
+// because it is real: an inherited pipe that is open and never written still
+// blocks a synchronous read, so a manual run inside a wrapper should redirect
+// (`< /dev/null`). Found by hanging exactly that way.
 let hookIn = {};
-try { const raw = readFileSync(0, 'utf8'); if (raw.trim()) hookIn = JSON.parse(raw); } catch { /* no stdin, or not JSON */ }
+try {
+  if (!process.stdin.isTTY) {
+    const raw = readFileSync(0, 'utf8');
+    if (raw.trim()) hookIn = JSON.parse(raw);
+  }
+} catch { /* no stdin, or not JSON */ }
 const SESSION = String(hookIn.session_id || hookIn.sessionId || '');
 const SOURCE = String(hookIn.source || 'startup');
 

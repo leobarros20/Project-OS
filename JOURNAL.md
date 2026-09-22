@@ -1,5 +1,16 @@
 # Journal — Project-OS
 
+## 2026-09-22 · Project OS Team lead (Claude)
+
+### Done
+- **0.7.1:** importing into the workbench is flat. Material from another tool lands where a hand-written note would, never in a folder named after its source; provenance goes in frontmatter; sub-folders mirror the source hierarchy only when the source had one. Correction from Leo: the handover has to be seamless, and a folder named after the exporter says the opposite.
+- Verified against the real imports before writing it: they are already flat, carrying notion_url / notion_id / exportado in frontmatter, with sub-trees only where the source had them. The spec now matches practice rather than prescribing against it.
+
+### Also found, by accident
+- **Activation hung forever when stdin stayed open.** A backgrounded shell left an inherited pipe open and the synchronous stdin read never returned. A hung hook emits nothing, and silence is the one outcome the module forbids. Fixed (skip the read when stdin is a terminal) and the residual limit written into the spec rather than hidden. Every vendor closes stdin, so no adopter was affected — it was found because a wrapper did not.
+
+### Not verified
+- No adopter has yet run the 0.7.1 migration step (moving a tool-named folder up into the workbench root); nobody currently has one.
 ## 2026-09-21 (later) · Project OS Team lead (Claude)
 
 ### Done
