@@ -59,7 +59,9 @@ for (const block of part2.match(/```[\s\S]*?```/g) || []) {
     if (!/\.(md|html)$/.test(name)) continue;
     const full = indented ? folder + name : name;
     if (!indented) folder = '';
-    if (!isTemplate(full)) declared.add(full);
+    // The spec names the workbench by its default (notes/); a renamed workbench (config notesPath) is the same declaration.
+    const resolved = full.replace(/^notes\//, notesPath);
+    if (!isTemplate(resolved)) declared.add(resolved);
   }
 }
 
@@ -105,8 +107,10 @@ versions.push(['version.json', readV('version.json', /"version":\s*"([0-9.]+)"/)
 versions.push(['CHANGELOG.md (Current version)', readV('CHANGELOG.md', /\*\*Current version:\*\*\s*([0-9.]+)/)]);
 versions.push(['CHANGELOG.md (first entry)', readV('CHANGELOG.md', /^## ([0-9.]+) —/m)]);
 versions.push(['.claude-plugin/plugin.json', readV('.claude-plugin/plugin.json', /"version":\s*"([0-9.]+)"/)]);
-const lockstep = new Set(versions.map((v) => v[1])).size === 1;
-if (!lockstep) red.push(`spec files out of lockstep: ${versions.map((v) => `${v[0]}=${v[1]}`).join(', ')}`);
+// An adopter carries only the three spec files; the spec repo's own version-bearing files are checked where they exist.
+const present = versions.filter((v) => v[1] !== 'missing');
+const lockstep = new Set(present.map((v) => v[1])).size === 1;
+if (!lockstep) red.push(`spec files out of lockstep: ${present.map((v) => `${v[0]}=${v[1]}`).join(', ')}`);
 for (const p of unclassified) red.push(`${p} — declared in PROJECT_OS.md Part 2 but UNCLASSIFIED in the manifest`);
 
 // --- Emit ---
