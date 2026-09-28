@@ -3,10 +3,18 @@
   "title": "Project-OS project configuration",
   "description": "The nine keys that parameterize the Project-OS skills. Anything not here stays literal in the skill.",
   "type": "object",
-  "required": ["tier", "verify", "docsPath"],
+  "required": [
+    "tier",
+    "verify",
+    "docsPath"
+  ],
   "properties": {
     "tier": {
-      "enum": ["solo", "team", "multi-team"],
+      "enum": [
+        "solo",
+        "team",
+        "multi-team"
+      ],
       "description": "Decides which OS pieces activate (PROJECT_OS.md Part 7). solo: no board, no queue, no committer hooks."
     },
     "repo": {
@@ -15,7 +23,12 @@
       "description": "owner/name. Replaces the repo slug hardcoded into every tracker command."
     },
     "tracker": {
-      "enum": ["github", "gitlab", "linear", "none"],
+      "enum": [
+        "github",
+        "gitlab",
+        "linear",
+        "none"
+      ],
       "description": "Where the handoff queue lives. 'none' MUST degrade to a file-based queue at docsPath + handoffs/, never break."
     },
     "verify": {
@@ -23,7 +36,10 @@
       "description": "The command that must pass before a handoff and at session close. Exit 0 = green. IT RUNS UNDER execSync FROM THE REPO ROOT, which means the platform's default shell: cmd.exe on Windows, /bin/sh elsewhere. A command that works in your terminal can still fail here — './gradlew ...' is the case that bit a real adopter, where the test suite was green and the watchdog read red. If the command needs a specific shell, a wrapper script or an absolute interpreter path, put that in this value; the doctor and the watchdog both run it exactly this way, so a mismatch surfaces as a config FAIL rather than as a mystery."
     },
     "commitStyle": {
-      "enum": ["numbered", "conventional"],
+      "enum": [
+        "numbered",
+        "conventional"
+      ],
       "description": "numbered = 'NN - description' with the uniqueness guard (BEHAVIOR 7.4); conventional = free subject."
     },
     "owner": {
@@ -32,7 +48,9 @@
     },
     "lanes": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Team names offered in a handoff body. Empty at solo tier."
     },
     "docsPath": {

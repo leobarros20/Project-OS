@@ -204,6 +204,14 @@
     {
       "path": "docs/studio/director-runbook.md",
       "reason": "studio module (BEHAVIOR 7.8) not adopted by this repo; it is solo tier"
+    },
+    {
+      "path": "docs/security/controls.md",
+      "reason": "optional (3.23); this repo has no users, no vendors and no AI system of its own — the catalog is a product artifact"
+    },
+    {
+      "path": "docs/security/ai-register.md",
+      "reason": "optional (3.24); not adopted here"
     }
   ]
 }

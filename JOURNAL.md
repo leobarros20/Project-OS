@@ -1,5 +1,18 @@
 # Journal — Project-OS
 
+## 2026-09-29 · Project OS Team lead (Claude)
+
+### Done
+- **0.7.3: evidence by construction.** Two optional artifacts, docs/security/controls.md (3.23) and docs/security/ai-register.md (3.24). The honest distinction is in the spec: privacy law applies to a product with users regardless of certification, while security and AI-management certifications audit the ORGANIZATION, not the code. No repo can be compliant by itself; what it can do is make the evidence a by-product of ordinary work.
+- Decision made and stated where the request left it open: **the freshness check does not parse the catalog tables.** Evidence artifacts go in the manifest like everything else, so an unclassified one is already red. One mechanism, not two.
+- Bootstrap step 12a creates both even with no users and no AI system, with the Not-applicable-yet table filled in. The habit before the need.
+
+### Fixed, and it is a failure of mine worth naming
+- The doctor honesty line about Codex hook trust finally says the right thing (trust hashes the hooks.json ENTRY, not the shim bytes). **0.6.3 claimed this fix shipped. It did not** — the edit failed silently and I published the claim without opening the file. Three weeks of a changelog asserting something false about my own repo. The 0.6.3 entry now carries the correction inline rather than being rewritten, because a changelog that quietly repairs its own false claims is worth less than one that shows them. This time I grepped the file before writing the entry.
+- The general lesson, which is the one this project keeps relearning at its own cost: a claim is not a fact until something checks it, and that includes a claim in a changelog about a one-line edit.
+
+### Not verified
+- Neither security artifact has been used by a real adopter; the templates are untested against an actual audit question.
 ## 2026-09-28 · Project OS Team lead (Claude)
 
 ### Done

@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.2
+**Current version:** 0.7.3
 
 This file does two jobs:
 
@@ -19,6 +19,29 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.7.3 — 2026-09-29
+
+### What changed
+
+**Evidence by construction: two optional security artifacts** (`PROJECT_OS.md` 3.23, 3.24). The distinction they rest on is stated in the spec rather than assumed: privacy law applies to a product with users whether or not anybody is certified, while security and AI-management certifications audit the **organization**, not the code — no repository can be compliant by itself. What a repository can do is make the evidence a by-product of ordinary work, so the day a buyer or an auditor asks, the answer is a file that was already being maintained rather than a month of archaeology.
+
+- **`docs/security/controls.md`** — one row per control: the framework clauses it speaks to, **where the control lives in the repo**, and **which generated artifact proves it ran**. Nine families when they apply: access and identity, change management, secure SDLC, data governance, logging and monitoring, encryption and backups, incident response, vendor management, AI systems. The third column is the one nobody keeps, and it is the reason this belongs in this OS at all: a control with no named evidence is a claim, and a claim nothing regenerates is the stale-artifact failure the freshness rule already exists to catch. Evidence is a path or the literal words `none yet` — never a description of an intention.
+- **`docs/security/ai-register.md`** — one entry per AI system, written **before** the system ships. Not a model card: a record of what it decides and who can overrule it. "Assists only, decides nothing" is a valid answer and should be written rather than left blank. One named owner, a person and not a team.
+- **Classification, and the decision about how the check sees it:** the catalog and the register are `DESCRIPTIVE`; every evidence artifact the catalog names is classified in the **freshness manifest** as `GENERATED` (with its emitter) or `CALENDAR`, so a dead control is a red row in the status file. **The check does not parse the catalog's tables** — an evidence artifact missing from the manifest is simply unclassified there, which is already red. One mechanism, not two: a parser for this file would be a second place to get the rules wrong.
+- **Bootstrap creates both even with no users and no AI system** (`BEHAVIOR.md` Part 5, step 12a), with the `Not applicable yet` table filled in — what is absent, and the condition that changes it. The habit has to exist before the need. A blank catalog and one that says "no users yet, revisit at first signup" look identical to a checker and completely different to a reader.
+
+### Fixed, and a correction to the record
+
+- **The doctor's honesty line about Codex hook trust is finally right**: trust hashes the **hooks.json entry** (command, timeout, matcher, path), not the shim's bytes, and Codex *does* expose `trustStatus` via `codex app-server` → `hooks/list`. **0.6.3's entry claimed this was already fixed. It was not** — that edit failed silently and the wrong line shipped for three weeks. The 0.6.3 entry now carries the correction inline instead of being quietly rewritten, because a changelog that repairs its own false claims in place is worth less than one that shows them. The lesson is the one this project keeps relearning at its own expense: a claim is not a fact until something checks it, including a claim in a changelog.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.3 versions; re-vendor `.project-os/` with `project-os init` to pick up the corrected doctor.
+2. Adopting the security artifacts is a decision, not a default. To adopt: create both from the 3.23 and 3.24 templates, fill `Not applicable yet` honestly, and add every evidence artifact the catalog names to the freshness manifest as `GENERATED` or `CALENDAR`. A catalog whose evidence is not in the manifest is a catalog nothing checks.
+3. `JOURNAL.md` entry for the upgrade.
 
 ---
 
@@ -118,7 +141,7 @@ Two bugs in the freshness check that only appear **in an adopting repo**, never 
 Bug fixes to the shipped vendor templates, found by a review that loaded them into each vendor for the first time. All three templates were broken on day one; none had been exercised by its vendor, only simulated.
 
 - **Gemini template timeout was 10 milliseconds.** Gemini measures hook timeouts in ms (verified in the bundle: `Hook timed out after ${timeout}ms`); the activation takes ~3 s, so Gemini killed it every session. Now `15000`. Claude and Codex measure in seconds and stay at `15`.
-- **Codex refused the shipped hooks.json.** Its top level accepts only `description` and `hooks`; the `_project-os` marker key made Codex log an unknown-field error and load zero hooks. The marker now lives in `description`. Also corrected: Codex hook trust hashes the hooks.json *entry* (command, timeout, matcher, path), not the shim bytes — changing `activate.mjs` does not invalidate trust; and Codex *does* expose `trustStatus` via `codex app-server` → `hooks/list`. The doctor's honesty line said the opposite on both counts and now says this.
+- **Codex refused the shipped hooks.json.** Its top level accepts only `description` and `hooks`; the `_project-os` marker key made Codex log an unknown-field error and load zero hooks. The marker now lives in `description`. Also corrected: Codex hook trust hashes the hooks.json *entry* (command, timeout, matcher, path), not the shim bytes — changing `activate.mjs` does not invalidate trust; and Codex *does* expose `trustStatus` via `codex app-server` → `hooks/list`. The doctor's honesty line said the opposite on both counts. **Correction, 2026-09-29: that edit silently failed and this entry was wrong for three weeks — the line still said "the shim's hash" until 0.7.3 actually changed it.** The record is left here rather than rewritten, because a changelog that quietly repairs its own false claims is worth less than one that shows them.
 - **The Codex `[features]` fragment could stop Codex from starting**: appended to a config that already had `[features]`, it produced a duplicate table. It is now a single key that `init` merges into an existing table, and it is documented as unnecessary on Codex CLI ≥ 0.153.2, where hooks are stable.
 - **Hook commands resolve the repo root themselves**: `node "$(git rev-parse --show-toplevel)/.project-os/activate.mjs" <vendor>`. The previous `sh .project-os/shim.sh` was cwd-relative — from a subdirectory it exited 127 with no payload, no DEGRADED, and the plugin gate read "not installed". It also removes the `sh` dependency, which Gemini on Windows (hooks via PowerShell) does not have.
 - **Double-fire guard.** Claude runs a plugin's SessionStart hook and a project's settings hook in parallel with no dedupe; a repo with both received two payloads. Activation now reads the vendor's stdin (session id, source) and emits once per session; the second run exits quietly and records `dedup`.

@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.7.2
+**Status:** Working draft · 0.7.3
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -136,6 +136,8 @@ docs/project-os-status.md   (freshness report — emitted by the freshness check
 ```
 docs/token-ledger.md      (AI compute log — see 3.18; optional as of 0.6)
 docs/conventions.md       (working agreement / agent manifesto — see 3.20)
+docs/security/controls.md    (controls catalog — see 3.23)
+docs/security/ai-register.md (AI system register — see 3.24)
 ```
 
 Each is adopted by a recorded decision, not by default. If adopted, each carries a freshness classification like every other artifact (see below).
@@ -1212,6 +1214,82 @@ working as intended. When a note matures, promote it (a decision record, a
 Not a dumping ground: a decision goes in decisions, a session record in the
 journal, a specification in `docs/`. This holds what has no other home yet.
 ~~~
+
+---
+
+### 3.23 — docs/security/controls.md (optional)
+
+**Purpose:** the controls catalog. One row per control: which framework clauses it satisfies, **where the control lives in the repo**, and **which generated artifact proves it ran**.
+
+**The distinction it rests on.** Privacy law applies to a product with users whether or not anybody is certified. Security and AI-management certifications audit the *organization*, not the code — no repository can be compliant by itself. What a repository **can** do is make the evidence a by-product of ordinary work, so that the day an auditor or a buyer asks, the answer is a file that was already being maintained rather than a month of archaeology. That is the whole ambition here: not certification, **evidence by construction**.
+
+**Why it belongs in this OS at all:** because the third column is the one nobody keeps. A control with no named evidence is a claim, and a claim that nothing regenerates is the same stale-artifact failure the freshness rule exists to catch (Part 2). Putting controls in the manifest makes a dead control a red row instead of a surprise.
+
+~~~markdown
+# Controls
+
+What this project does, where it does it, and what proves it ran. Framework
+clauses are references, not a claim of certification — see the note at the end.
+
+## [Family]
+
+| Control | Satisfies | Where it lives | Evidence it ran |
+|---|---|---|---|
+| [what is actually done] | [framework clause refs] | [path in this repo] | [generated artifact, or "none yet"] |
+
+## Not applicable yet
+
+| Control family | Why not yet | Revisit when |
+|---|---|---|
+| [family] | [no users / no AI system / no vendor] | [the condition that changes it] |
+
+## What this catalog does not claim
+
+It is a record of what this project does, not an audit result. A clause
+reference means "this control speaks to that clause", never "this project is
+certified". Certification audits an organization; this file is one input.
+~~~
+
+**The nine families** a catalog covers when they apply: access and identity · change management · secure SDLC · data governance · logging and monitoring · encryption and backups · incident response · vendor management · AI systems (which is where 3.24 attaches).
+
+**Rules:**
+
+- **Evidence is a path or the word `none yet`.** Never a description of an intention. A row whose evidence column describes a habit rather than naming a file is the row that will be false first.
+- **Every named evidence artifact is classified in the freshness manifest** — `GENERATED` with its emitter where something regenerates it, `CALENDAR` where a person or a ritual produces it on a cadence. The catalog itself is `DESCRIPTIVE`: it changes when the controls change, not on a clock.
+- **The check reads the manifest, not this file.** The freshness check does not parse these tables; an evidence artifact that is not in the manifest is simply unclassified there, which is already red. One mechanism, not two — a parser for this file would be a second place to get the rules wrong.
+- **`Not applicable yet` is a real row, not an omission.** It names what is absent and what would change that. A blank catalog and a catalog that says "no users yet, revisit at first signup" look identical to a checker and completely different to a reader.
+
+---
+
+### 3.24 — docs/security/ai-register.md (optional)
+
+**Purpose:** one entry per AI system the project runs, for the AI-management family in 3.23. Not a model card: a record of what the system decides and who can overrule it.
+
+~~~markdown
+# AI systems
+
+One entry per AI system in this project. An entry exists before the system
+ships, not after.
+
+## [System name]
+
+- **Purpose:** [what it is for, in one line]
+- **Model and provider:** [model id, provider, where it runs]
+- **Data it sees:** [inputs, including any personal data, and what is redacted]
+- **What it decides:** [the decision it makes, or "assists only, decides nothing"]
+- **Human override:** [who can overrule it, how, and whether that is logged]
+- **Risks considered:** [what could go wrong for a user, and what limits it]
+- **Prompt versioning:** [where prompts live and how a change is recorded]
+- **Evaluation:** [how quality is measured, how often, where results live]
+- **Owner:** [the person accountable, not the team]
+~~~
+
+**Rules:**
+
+- **An entry exists before the system ships.** Written afterwards it is a description; written before, it is a design review — and the two fields that make it one are *what it decides* and *who can overrule it*.
+- **"Assists only, decides nothing" is a valid and common answer.** Write it, rather than leaving the field empty, so the next reader knows it was considered.
+- **One named owner per system**, a person and not a team, for the same reason every other artifact in this OS names one.
+- **The register is `DESCRIPTIVE`;** its evaluation results, if any are generated, are their own classified artifact.
 
 ---
 

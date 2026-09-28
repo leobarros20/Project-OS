@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.7.2
+**Status:** Working draft · 0.7.3
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, bootstrapping, and team orchestration. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -297,6 +297,7 @@ If starting from an existing project that does NOT follow this OS:
 11. **Commit `docs/data-model.md`, `docs/permissions.md`, `docs/integrations.md`, `docs/telemetry.md`** with what's in the codebase. If telemetry doesn't exist yet, note that and propose a minimal starter event set.
 12. **Commit `docs/architecture.md`** — the system context (L3) and every container (L4) you can identify from the manifest, entry points, and runtime config. This is the most detailed structural artifact; capture runtime type, tech stack, state owned, and how containers talk. Do not stub it thinly.
 13. **Commit `docs/components/NN-*.md`** for every container over the L5 forcing-rule threshold (~500 LOC or ~5 files) — decompose each into components with real file paths, public surface, and call edges.
+12a. **Create `docs/security/controls.md` and `docs/security/ai-register.md`** (`PROJECT_OS.md` 3.23, 3.24) from their templates — **even when the project has no users and no AI system.** Fill the `Not applicable yet` table with what is absent and what would change it ("no users yet, revisit at first signup"; "no AI system yet, revisit when one ships"). The habit has to exist before the need: a catalog started the week a buyer asks is archaeology, and the third column — what proves the control ran — is the one nobody reconstructs. Classify every evidence artifact the catalog names in the freshness manifest; the catalog and the register are `DESCRIPTIVE`.
 13a. **Commit `docs/constants.md`** — walk every config file, `.env.example`, theme file, and physics/constants module and extract values into typed groups. Mark numeric values with min/max where the range is inferable. Do not include actual secrets — use `[set in environment]` as the value for any secret and type `secret`.
 13b. **If adopting the optional `docs/token-ledger.md`** (a recorded decision — see `PROJECT_OS.md` 3.18): create the file with its header and empty table, then immediately append the first row for this bootstrap session (timestamp: now, model: current model, token counts: best estimate or `~estimate`, task: "bootstrap").
 14. **Identify implicit decisions** in the code. Draft a decision doc for each, status `Proposed`.

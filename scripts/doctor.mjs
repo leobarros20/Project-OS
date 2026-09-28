@@ -190,7 +190,7 @@ check('watchdog', 'Is the out-of-band watchdog alive?', () => {
 const CANNOT_SEE = [
   'Whether any documented sentence is TRUE. Every check here verifies structure, presence and freshness — never correctness.',
   'Whether an injection actually reached a model. The shim is run and its output measured; that an agent then read it is unobservable from here.',
-  'Whether any vendor REGISTERED the hook. No vendor exposes an API for it; only the config file, the shim and the heartbeat trail are observable. Codex in particular binds hook trust to the shim\'s hash — a Project-OS upgrade silently disables it until a human re-trusts it in /hooks, and nothing here can see that.',
+  'Whether Claude Code or Gemini REGISTERED the hook: neither exposes an API for it, so only their config file, the shim and the heartbeat trail are observable here. Codex DOES expose it (codex app-server -> hooks/list -> trustStatus) and this doctor does not probe it yet. Codex trust hashes the hooks.json ENTRY (command, timeout, matcher, path), not the shim bytes: changing activate.mjs does not invalidate trust, changing the entry does.',
   'Whether a CHANGELOG migration works. Nothing executes an upgrade against a real older repo, so every migration step stays a claim until an adopter runs it.',
   'Anything about build caches. This runs as a plain script with no cache; a port into a caching build system must re-verify the inputs-as-a-set trap itself.',
   'Whether the spec is any good. Adoption experience arrives as a message, never as a file date.',
