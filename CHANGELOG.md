@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.1
+**Current version:** 0.7.2
 
 This file does two jobs:
 
@@ -19,6 +19,25 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.7.2 — 2026-09-28
+
+### What changed
+
+Two bugs in the freshness check that only appear **in an adopting repo**, never in the spec repo — which is why the spec repo's own green never caught them. Both were found by installing 0.7.1 across eight repos, and both are reproduced and confirmed here in a scratch adopter before release.
+
+- **A renamed workbench no longer reads as unclassified.** Part 2 names the workbench by its default (`notes/`), but an adopter that sets `notesPath` to something else (say `notas/`) got `notes/README.md — UNCLASSIFIED` on every run: the declaration was matched literally against a directory that does not exist there. The declaration now resolves to the configured `notesPath`, so the spec's default name and the project's chosen name are the same declaration.
+- **Lockstep no longer demands the spec repo's own files.** The check compared `version.json`, `CHANGELOG.md` and `.claude-plugin/plugin.json` alongside the three spec `Status:` lines. An adopter carries only the spec files, so all three read `missing` and every adopting repo went red on lockstep. It now compares only the version-bearing files that are actually present. At least one adopter had hand-patched this twice before it was reported, which is the signal that a checker's own bug had become somebody's routine.
+- **The `verify` contract is written down**: it runs under `execSync` from the repo root, i.e. the platform's default shell — `cmd.exe` on Windows. A command that works in a terminal can still fail there; `./gradlew …` is the case that bit a real adopter, whose test suite was green while the watchdog read red. The config schema now says so, and names the fix (a wrapper script or an absolute interpreter path). No new check was added: the doctor and the watchdog already invoke `verify` identically, so this class of mismatch already surfaces as a config FAIL.
+
+### Migration (agent instructions — idempotent)
+
+1. **Re-vendor the checker**: run `project-os init` in each adopting repo. It overwrites `.project-os/` with the fixed copies and leaves your config, manifest and artifacts untouched.
+2. If a repo hand-patched either bug locally, drop the patch — the shipped copy now carries the fix, and a local divergence is the thing that makes the next upgrade silently skip you.
+3. If `verify` is a shell-specific command (a `./gradlew` wrapper, an activated virtualenv, anything relying on your interactive shell), confirm it runs under `execSync` from the repo root and wrap it if it does not. Running the doctor is the fastest way to find out.
+4. `JOURNAL.md` entry for the upgrade.
 
 ---
 

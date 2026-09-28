@@ -20,7 +20,7 @@
     },
     "verify": {
       "type": "string",
-      "description": "The command that must pass before a handoff and at session close. Exit 0 = green."
+      "description": "The command that must pass before a handoff and at session close. Exit 0 = green. IT RUNS UNDER execSync FROM THE REPO ROOT, which means the platform's default shell: cmd.exe on Windows, /bin/sh elsewhere. A command that works in your terminal can still fail here — './gradlew ...' is the case that bit a real adopter, where the test suite was green and the watchdog read red. If the command needs a specific shell, a wrapper script or an absolute interpreter path, put that in this value; the doctor and the watchdog both run it exactly this way, so a mismatch surfaces as a config FAIL rather than as a mystery."
     },
     "commitStyle": {
       "enum": ["numbered", "conventional"],

@@ -1,5 +1,20 @@
 # Journal — Project-OS
 
+## 2026-09-28 · Project OS Team lead (Claude)
+
+### Done
+- **0.7.2:** two freshness bugs that only appear in an ADOPTING repo, never here — which is exactly why this repo's own green never caught them. A renamed workbench (notesPath) read as UNCLASSIFIED because Part 2 names it by its default; lockstep demanded version.json / CHANGELOG / plugin.json, which only the spec repo has, so every adopter went red. Both were fixed upstream by the orchestrator (1bf6a0c) after installing 0.7.1 in eight repos.
+- **Reproduced both before releasing** rather than taking the report on trust: built a scratch adopter (notesPath=notas/, no version files), confirmed green with the fix, reverted each hunk and confirmed each red. The fixes are correct and minimal.
+- Wrote the verify contract into the config schema: it runs under execSync from the repo root, i.e. cmd.exe on Windows. A ./gradlew command was green in a real adopter's test suite and red in its watchdog for exactly this reason.
+
+### Declined, with the reason
+- The request also asked for a doctor check that runs verify like the watchdog. Read both first: they already invoke it identically (execSync, cwd root), so that class of mismatch already surfaces as a config FAIL. Adding a second check would have been ceremony, not coverage.
+
+### Worth noting about how this was found
+- At least one adopter hand-patched one of these bugs twice before anybody reported it. A checker bug that becomes somebody's routine is invisible to the checker, and nothing in the design catches that today.
+
+### Not verified
+- The migration step (re-vendoring via init) against a repo that hand-patched the checker; nobody has run that path yet.
 ## 2026-09-22 · Project OS Team lead (Claude)
 
 ### Done
