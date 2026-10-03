@@ -23,6 +23,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { heartbeatState } from './heartbeat.mjs';
 
 const args = process.argv.slice(2);
 const SOURCE = (args[args.indexOf('--source') + 1] || 'manual').replace(/^--.*/, 'manual');
@@ -50,10 +51,16 @@ if (cfg.verify) { try { execSync(cfg.verify, { cwd: root, encoding: 'utf8', stdi
 // 3. activation trail (commit-relative, never wall-clock)
 const head = sh('git rev-parse --short HEAD');
 const headTime = Date.parse(sh('git log -1 --format=%cI HEAD') || 0);
-const hb = readJSON(join(root, '.project-os/heartbeat.json'));
-if (hb && hb.phase === 'started') red.push(`trail: last activation (${hb.at}) started and never finished`);
-if (hb && hb.state === 'BROKEN_ACTIVATION') red.push(`trail: last activation reported BROKEN_ACTIVATION`);
-if (hb && hb.at && headTime > Date.parse(hb.at) + 60 * 60e3) red.push(`trail: HEAD (${new Date(headTime).toISOString()}) is newer than the last heartbeat (${hb.at}) — a session committed here without activation firing`);
+// Per-session trail, not one shared file. Through 0.7.3 this read a single
+// heartbeat.json and nine concurrent sessions raced it into a stranded
+// "started", which this watchdog then used to block a real merge push. A
+// started record is only a finding when it is OLD and its session never
+// finished: with concurrent sessions, records in flight are the normal state.
+const { latest: hb, running, stranded } = heartbeatState(root);
+if (stranded.length) red.push(`trail: ${stranded.length} activation(s) started and never finished (oldest ${stranded[stranded.length - 1].at}, session ${stranded[stranded.length - 1].session})`);
+if (hb && hb.state === 'BROKEN_ACTIVATION') red.push(`trail: last finished activation reported BROKEN_ACTIVATION`);
+if (hb && hb.at && headTime > Date.parse(hb.at) + 60 * 60e3) red.push(`trail: HEAD (${new Date(headTime).toISOString()}) is newer than the last finished activation (${hb.at}) — a session committed here without activation firing`);
+if (!hb && !running.length && !stranded.length) red.push('trail: no activation has ever finished on this machine');
 
 const ledgerPath = join(root, '.project-os/activation-ledger.md');
 if (existsSync(ledgerPath)) {

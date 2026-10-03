@@ -50,8 +50,13 @@ catch {
   say(`Project-OS init → UMBRELLA ${TARGET}${DRY ? '  (dry run, nothing written)' : ''}`);
   say(`  members: ${members.join(', ')}`);
   const wrU = (rel, content) => { if (!DRY) { mkdirSync(dirname(join(TARGET, rel)), { recursive: true }); writeFileSync(join(TARGET, rel), content); } };
-  const actSrc = join(SRC, 'activation/activate.mjs');
-  if (!DRY) { mkdirSync(join(TARGET, '.project-os'), { recursive: true }); copyFileSync(actSrc, join(TARGET, '.project-os/activate.mjs')); }
+  // activate.mjs imports ./heartbeat.mjs, so the dispatcher needs both: copying
+  // only the dispatcher is how the umbrella installer broke when that import
+  // was added, caught by the umbrella test rather than by an adopter.
+  if (!DRY) {
+    mkdirSync(join(TARGET, '.project-os'), { recursive: true });
+    for (const f of ['activate.mjs', 'heartbeat.mjs']) copyFileSync(join(SRC, 'activation', f), join(TARGET, '.project-os', f));
+  }
   say(`${DRY ? '[dry-run] would' : '  ✓'} write .project-os/activate.mjs (the umbrella dispatcher)`);
   const declPath = join(TARGET, '.project-os/umbrella.json');
   if (existsSync(declPath)) say('  = .project-os/umbrella.json exists, not touched');
@@ -85,7 +90,7 @@ const wr = (rel, content, mode) => { if (!DRY) { mkdirSync(dirname(join(root, re
 const readJSON = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 
 // ------------------------------------------------------- 1. the runtime files
-for (const f of ['activate.mjs', 'shim.sh', 'watchdog.mjs']) {
+for (const f of ['activate.mjs', 'heartbeat.mjs', 'shim.sh', 'watchdog.mjs']) {
   const src = join(SRC, 'activation', f), dst = join(root, '.project-os', f);
   const same = existsSync(dst) && readFileSync(src, 'utf8') === readFileSync(dst, 'utf8');
   if (same) { say(`  = .project-os/${f} already current`); continue; }

@@ -46,7 +46,9 @@ const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath
 // two things that ARE observable: run the shim exactly as each vendor would and
 // parse its output against the shared contract, then read the heartbeat trail.
 check('activation', 'Does activation behave as every vendor expects, and has it been firing?', () => {
-  const suite = quiet('node scripts/activation-test.mjs');
+  // --fast: the 9-process concurrency burst is a release gate, not something to
+  // re-run on every doctor visit (the sabotage suite alone runs the doctor 11x).
+  const suite = quiet('node scripts/activation-test.mjs --fast');
   if (!suite.ok) {
     const fails = suite.out.split('\n').filter((l) => l.includes('[ FAIL ]')).map((l) => l.replace(/.*\]\s*/, ''));
     return { state: 'FAIL', detail: `vendor simulation failed: ${fails.join(' · ') || suite.out.slice(-200)}` };
@@ -190,6 +192,7 @@ check('watchdog', 'Is the out-of-band watchdog alive?', () => {
 const CANNOT_SEE = [
   'Whether any documented sentence is TRUE. Every check here verifies structure, presence and freshness — never correctness.',
   'Whether an injection actually reached a model. The shim is run and its output measured; that an agent then read it is unobservable from here.',
+  'The concurrency burst: the doctor runs the activation suite with --fast, so the nine-session race is proven at release time and not on every visit.',
   'Whether Claude Code or Gemini REGISTERED the hook: neither exposes an API for it, so only their config file, the shim and the heartbeat trail are observable here. Codex DOES expose it (codex app-server -> hooks/list -> trustStatus) and this doctor does not probe it yet. Codex trust hashes the hooks.json ENTRY (command, timeout, matcher, path), not the shim bytes: changing activate.mjs does not invalidate trust, changing the entry does.',
   'Whether a CHANGELOG migration works. Nothing executes an upgrade against a real older repo, so every migration step stays a claim until an adopter runs it.',
   'Anything about build caches. This runs as a plain script with no cache; a port into a caching build system must re-verify the inputs-as-a-set trap itself.',

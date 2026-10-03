@@ -1,5 +1,21 @@
 # Journal — Project-OS
 
+## 2026-10-03 · Project OS Team lead (Claude)
+
+### Done
+- **0.7.4: the heartbeat is a directory, one record per session.** Reported from a real product with a ledger row as evidence: nine sessions woken in three minutes raced the single heartbeat.json, the last writer's "started" survived, and the pre-push watchdog blocked a real merge push with "started and never finished". Each activation now writes its own file, and — the half the layout alone does not fix — a "started" record is a finding only when it is OLD and its own session never finished. With concurrent sessions, records in flight are the normal state.
+- Shared helper (activation/heartbeat.mjs) so the activator, watchdog and doctor have one definition of what the trail says. Legacy heartbeat.json still read. Four new tests: the nine-session burst, a running session, an old crash, and the legacy path. 18/18 green.
+- The documented manual-run command now redirects stdin, which 0.7.1 knew it needed and left out of the instructions anyway.
+
+### Corrected in the report
+- The reporter inferred the 24-byte markers proved completion. They do not: that marker is written at START. Their proposed rule (red only when no marker exists) would never have fired. Said so, with the mechanism that does work.
+
+### Two things I broke and caught
+- Adding the shared helper gave activate.mjs a sibling import, and the umbrella installer copied only the dispatcher — an umbrella install would have been broken on arrival. The umbrella test caught it, not an adopter.
+- The same change made the doctor minutes long, and the sabotage suite runs the doctor eleven times, so the dev loop went to most of an hour. Added --fast (vendor contract only, 30 s); release gates stay on the full suite.
+
+### Found while fixing, and it is the same failure as last time
+- activation-test still carried the false Codex claim that 0.7.3 corrected in the doctor. One fix, two files, and I only checked one. The lesson repeats: a correction is not done until every copy of the claim is checked.
 ## 2026-09-29 · Project OS Team lead (Claude)
 
 ### Done

@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.3
+**Current version:** 0.7.4
 
 This file does two jobs:
 
@@ -19,6 +19,38 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.7.4 — 2026-10-03
+
+### What changed
+
+**The heartbeat is a directory, one record per session.** Reported from a real product with evidence, and the evidence is the point: nine team sessions were woken inside three minutes, every one of them ran activation and finished, and the single shared `.project-os/heartbeat.json` ended holding the *last writer's* `started` — its own `done` lost in the race. The pre-push watchdog read "started and never finished" and **blocked a real merge push**. The ledger row shows RED at 03:37 and GREEN three minutes later, once somebody re-ran activation by hand.
+
+- Each activation now writes `.project-os/heartbeat/<session>.json`, its own file, `started` then `done`. Concurrent sessions cannot overwrite each other.
+- **And the half the file layout alone does not fix:** with sessions running concurrently, *a `started` record existing is the normal state*, not a failure. Nine agents working means records in flight. So a `started` record is a finding only when it is older than an hour **and** its own session never wrote a `done`. "Running right now" and "crashed long ago" are different things, and the old check could not tell them apart.
+- The watchdog, the activator and the doctor all read the trail through one shared helper (`activation/heartbeat.mjs`), so there is one definition of "what the trail says" rather than three.
+- **A pre-0.7.4 `heartbeat.json` is still read**, so an adopter who has not re-vendored keeps a working trail. Finished records older than a week are pruned, so the directory cannot grow forever.
+- **The documented manual-run command now redirects stdin** (`< /dev/null`). The fallback in the static block hung under a non-TTY wrapper, which is the residual limit 0.7.1 wrote down and then left in the instructions anyway.
+
+- **The doctor stopped being expensive.** Giving the activation suite a sibling module and a nine-process burst made the doctor minutes long, and the sabotage suite runs the doctor eleven times — the whole development loop went from a minute to the better part of an hour. The suite now takes `--fast`, which runs the vendor contract only (four cases, 30 s instead of four minutes); the burst and the other release gates run on the full suite. Also fixed: `activation-test` carried the same false claim about Codex hook trust that 0.7.3 corrected in the doctor. It was in a second file and the first fix did not reach it.
+
+### Corrected from the report
+
+The report inferred that the nine 24-byte `.activated-<session>` markers proved the activations completed. They do not: that marker is written at **start** and holds an ISO timestamp (24 bytes), or the word `dedup` for a second fire on the same session. It is not evidence of completion, which is why the report's proposed rule — treat a `started` heartbeat as red only when no marker exists — would never have fired. The age-plus-own-session rule above is the mechanism that actually distinguishes the two cases.
+
+### Found while fixing it
+
+Adding the shared helper gave `activate.mjs` a sibling import, and the **umbrella installer copied only the dispatcher** — so an umbrella install would have been broken on arrival. Caught by the umbrella test, not by an adopter. Both the installer and the test now copy the pair.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.4 versions.
+2. **Re-vendor every adopting repo**: `project-os init`. It installs the new `heartbeat.mjs` beside `activate.mjs` — they travel together now, and an install with only one of them does not run. Re-run it on umbrella folders too.
+3. Add `.project-os/heartbeat/` to `.gitignore` (init does this). The old `heartbeat.json` can stay: it is read as a legacy record and ignored once the directory has entries.
+4. If a watchdog is currently blocking a push with "started and never finished" and the sessions in question did finish, that is this bug. Re-vendor, then re-run the watchdog.
+5. `JOURNAL.md` entry for the upgrade.
 
 ---
 

@@ -10,7 +10,7 @@
 // Exit 0 = every case passed · 1 = something did not behave as a vendor expects.
 
 import { execSync, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, unlinkSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, unlinkSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,13 +18,19 @@ const ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).tri
 const GIT = 'git -c user.email=t@local -c user.name=t';
 const SENTINEL = /^PROJECT-OS v[\d.]+ ACTIVE \d{4}-\d\d-\d\dT[\d:.]+Z \[(\w+)\] state=([A-Z_]+)(?: \S+=\S+)*$/;
 const BUDGET_MS = 8000; // measured base ~2.5-3 s here; vendors kill at 15 s (15000 ms on Gemini)
+// --fast runs only the vendor contract. Every case clones the repo and makes a
+// commit, so the full suite is minutes, and the doctor is run constantly (the
+// sabotage suite alone runs it 11 times). The rest are release gates.
+const FAST = process.argv.includes('--fast');
+const FAST_CASES = /exactly one parseable payload|not installed/;
 let sessionSeq = 0; // every run gets its own session id unless a case asks otherwise
 
 const clone = () => {
   const d = mkdtempSync(join(tmpdir(), 'po-act-'));
   cpSync(ROOT, d, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
   execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m scratch`, { cwd: d, stdio: 'pipe' });
-  const hb = join(d, '.project-os/heartbeat.json'); if (existsSync(hb)) unlinkSync(hb);
+  rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true });
+  rmSync(join(d, '.project-os/heartbeat.json'), { force: true });
   return d;
 };
 const shim = (d, vendor, env = {}, session = `s-${++sessionSeq}`) => {
@@ -32,11 +38,22 @@ const shim = (d, vendor, env = {}, session = `s-${++sessionSeq}`) => {
   const r = spawnSync('sh', ['activation/shim.sh', vendor], { cwd: d, encoding: 'utf8', input: JSON.stringify({ session_id: session, hook_event_name: 'SessionStart', source: 'startup' }), env: { ...process.env, ...env } });
   return { code: r.status, out: r.stdout, err: r.stderr, ms: Date.now() - t0 };
 };
-const hb = (d) => { try { return JSON.parse(readFileSync(join(d, '.project-os/heartbeat.json'), 'utf8')); } catch { return null; } };
+// The heartbeat is a DIRECTORY as of 0.7.4: one record per session, because a
+// single shared file raced under nine concurrent activations in production.
+const hbAll = (d) => {
+  const out = [];
+  try { for (const f of readdirSync(join(d, '.project-os/heartbeat'))) out.push(JSON.parse(readFileSync(join(d, '.project-os/heartbeat', f), 'utf8'))); } catch { /* none */ }
+  try { out.push(JSON.parse(readFileSync(join(d, '.project-os/heartbeat.json'), 'utf8'))); } catch { /* none */ }
+  return out.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0));
+};
+const hb = (d) => hbAll(d).find((r) => r.phase === 'done') || null;
+const writeHb = (d, name, rec) => { mkdirSync(join(d, '.project-os/heartbeat'), { recursive: true }); writeFileSync(join(d, '.project-os/heartbeat', name + '.json'), JSON.stringify(rec)); };
+const clearHb = (d) => { rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true }); rmSync(join(d, '.project-os/heartbeat.json'), { force: true }); };
 const parse = (out) => { const j = JSON.parse(out.trim()); const ctx = j.hookSpecificOutput.additionalContext; const m = ctx.split('\n')[0].match(SENTINEL); return { j, ctx, vendor: m && m[1], state: m && m[2], sentinelOk: !!m }; };
 
 const results = [];
-const t = (name, fn) => { try { const r = fn(); results.push({ name, ok: r === true, detail: r === true ? '' : String(r) }); } catch (e) { results.push({ name, ok: false, detail: `threw: ${e.message}` }); } };
+const t = (name, fn) => {
+  if (FAST && !FAST_CASES.test(name)) return; try { const r = fn(); results.push({ name, ok: r === true, detail: r === true ? '' : String(r) }); } catch (e) { results.push({ name, ok: false, detail: `threw: ${e.message}` }); } };
 
 // 0. Not installed -> silent, exit 0.
 t('not installed: prints nothing, exits 0', () => {
@@ -77,7 +94,7 @@ t('first run UNVERIFIED, second run settles', () => {
 // 3. BROKEN_ACTIVATION: a commit newer than the last heartbeat.
 t('BROKEN_ACTIVATION when HEAD is newer than the last heartbeat', () => {
   const d = clone(); try {
-    writeFileSync(join(d, '.project-os/heartbeat.json'), JSON.stringify({ phase: 'done', at: '2020-01-01T00:00:00.000Z', vendor: 'claude', state: 'HEALTHY' }));
+    writeHb(d, 'ancient', { phase: 'done', at: '2020-01-01T00:00:00.000Z', vendor: 'claude', state: 'HEALTHY' });
     const p = parse(shim(d, 'codex').out);
     return p.state === 'BROKEN_ACTIVATION' || `got ${p.state}`;
   } finally { rmSync(d, { recursive: true, force: true }); }
@@ -88,7 +105,7 @@ t('quiet repo: old HEAD + old heartbeat is not an alarm (no wall-clock threshold
   const d = clone(); try {
     // Committer date is what %cI reads. Pass it via env, not a shell prefix: that syntax does not exist on Windows.
     execSync(`${GIT} commit -q --amend --no-edit --date="2020-06-01T00:00:00Z"`, { cwd: d, stdio: 'pipe', env: { ...process.env, GIT_COMMITTER_DATE: '2020-06-01T00:00:00Z' } });
-    writeFileSync(join(d, '.project-os/heartbeat.json'), JSON.stringify({ phase: 'done', at: '2020-06-02T00:00:00.000Z', vendor: 'claude', state: 'HEALTHY' }));
+    writeHb(d, 'quiet', { phase: 'done', at: '2020-06-02T00:00:00.000Z', vendor: 'claude', state: 'HEALTHY' });
     const p = parse(shim(d, 'gemini').out);
     return p.state !== 'BROKEN_ACTIVATION' || 'a month-old untouched repo raised BROKEN_ACTIVATION — that is the false alarm the commit-relative rule exists to prevent';
   } finally { rmSync(d, { recursive: true, force: true }); }
@@ -97,7 +114,9 @@ t('quiet repo: old HEAD + old heartbeat is not an alarm (no wall-clock threshold
 // 5. Stranded "started" record from a previous crash is reported.
 t('previous run crashed mid-way: next run says so', () => {
   const d = clone(); try {
-    writeFileSync(join(d, '.project-os/heartbeat.json'), JSON.stringify({ phase: 'started', at: new Date().toISOString(), vendor: 'claude' }));
+    // Old, so it is a crash rather than a session still running: a fresh
+    // "started" is the normal state when several sessions are open at once.
+    writeHb(d, 'crashed', { phase: 'started', at: '2020-01-01T00:00:00.000Z', vendor: 'claude' });
     const p = parse(shim(d, 'claude').out);
     return /never finished|crashed/i.test(p.ctx) || 'stranded started-record was not reported';
   } finally { rmSync(d, { recursive: true, force: true }); }
@@ -108,8 +127,9 @@ t('own crash -> one DEGRADED payload, exit 0 (silence is never legal)', () => {
   const d = clone(); try {
     const c = JSON.parse(readFileSync(join(d, '.project-os/config.json'), 'utf8')); c.docsPath = 12345; // .replace on a number throws inside the try
     writeFileSync(join(d, '.project-os/config.json'), JSON.stringify(c));
-    const r = shim(d, 'claude'); const p = parse(r.out); const h = hb(d);
-    return (r.code === 0 && p.state === 'DEGRADED' && h && h.state === 'DEGRADED' && h.exit === 1) || `exit=${r.code} state=${p.state} hb=${JSON.stringify(h)}`;
+    const r = shim(d, 'claude'); const p = parse(r.out);
+    const h = hbAll(d).find((x) => x.state === 'DEGRADED');
+    return (r.code === 0 && p.state === 'DEGRADED' && h && h.exit === 1) || `exit=${r.code} state=${p.state} hb=${JSON.stringify(h)}`;
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
@@ -134,8 +154,9 @@ t('umbrella with two members -> exactly one payload naming both', () => {
       const d = join(u, name);
       cpSync(ROOT, d, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
       execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m scratch`, { cwd: d, stdio: 'pipe' });
-      const hbf = join(d, '.project-os/heartbeat.json'); if (existsSync(hbf)) unlinkSync(hbf);
-      cpSync(join(ROOT, 'activation/activate.mjs'), join(d, '.project-os/activate.mjs'));
+      rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true });
+      rmSync(join(d, '.project-os/heartbeat.json'), { force: true });
+      for (const f of ['activate.mjs', 'heartbeat.mjs']) cpSync(join(ROOT, 'activation', f), join(d, '.project-os', f));
     }
     const r = spawnSync(process.execPath, [join(ROOT, 'activation/activate.mjs'), 'claude'], {
       cwd: u, encoding: 'utf8', input: JSON.stringify({ session_id: 'umb-1', source: 'startup' }),
@@ -149,7 +170,7 @@ t('umbrella with two members -> exactly one payload naming both', () => {
     if (!/alpha/.test(ctx) || !/beta/.test(ctx)) return 'payload does not name both members';
     if (ctx.length > 10000) return `payload ${ctx.length} chars over the cap`;
     for (const n of ['alpha', 'beta']) {
-      if (!existsSync(join(u, n, '.project-os/heartbeat.json'))) return `${n} has no heartbeat: its own activation did not run`;
+      if (!existsSync(join(u, n, '.project-os/heartbeat'))) return `${n} has no heartbeat: its own activation did not run`;
     }
     return true;
   } finally { rmSync(u, { recursive: true, force: true }); }
@@ -173,7 +194,7 @@ t('umbrella.json naming an uninstalled member -> NOT_ACTIVATED, named', () => {
     const d = join(u, 'alpha');
     cpSync(ROOT, d, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
     execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m scratch`, { cwd: d, stdio: 'pipe' });
-    cpSync(join(ROOT, 'activation/activate.mjs'), join(d, '.project-os/activate.mjs'));
+    for (const f of ['activate.mjs', 'heartbeat.mjs']) cpSync(join(ROOT, 'activation', f), join(d, '.project-os', f));
     mkdirSync(join(u, '.project-os'), { recursive: true });
     writeFileSync(join(u, '.project-os/umbrella.json'), JSON.stringify({ members: [{ name: 'alpha', path: 'alpha' }, { name: 'ghost', path: 'ghost' }] }));
     const r = spawnSync(process.execPath, [join(ROOT, 'activation/activate.mjs'), 'codex'], {
@@ -187,6 +208,72 @@ t('umbrella.json naming an uninstalled member -> NOT_ACTIVATED, named', () => {
   } finally { rmSync(u, { recursive: true, force: true }); }
 });
 
+// 12. NINE CONCURRENT ACTIVATIONS. This is the reported production failure:
+// through 0.7.3 every session wrote the same heartbeat.json twice, nine sessions
+// opened inside three minutes raced it, the last writer's "started" survived
+// while its "done" was lost, and the pre-push watchdog read "started and never
+// finished" and blocked a real merge push.
+t('nine concurrent activations leave no stranded record, and the watchdog stays green', () => {
+  const d = clone();
+  try {
+    // Nine at once, in one shell, each with its own session id and its own
+    // stdin closed the way a vendor closes it.
+    const burst = Array.from({ length: 9 }, (_, i) =>
+      `printf '%s' '{"session_id":"conc-${i}","source":"startup"}' | node activation/activate.mjs claude >/dev/null 2>&1 &`
+    ).join(' ') + ' wait';
+    const r = spawnSync('sh', ['-c', burst], { cwd: d, encoding: 'utf8' });
+    if (r.status !== 0) return `the burst itself failed: ${String(r.stderr).slice(0, 160)}`;
+    const hbDir = join(d, '.project-os/heartbeat');
+    if (!existsSync(hbDir)) return 'no per-session heartbeat directory was written';
+    const files = readdirSync(hbDir);
+    if (files.length < 9) return `expected 9 per-session records, found ${files.length}: a shared file is still being raced`;
+    const stranded = files
+      .map((f) => JSON.parse(readFileSync(join(hbDir, f), 'utf8')))
+      .filter((r) => r.phase !== 'done');
+    if (stranded.length) return `${stranded.length} record(s) left as "started" after every activation exited`;
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    if (w.status !== 0) return `watchdog went red after a clean concurrent burst: ${w.stdout.trim().slice(0, 200)}`;
+    return true;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 13. A session still inside its activation must not look like a crash: with
+// concurrent sessions, records in flight are the normal state.
+t('a fresh "started" record is running, not stranded', () => {
+  const d = clone();
+  try {
+    mkdirSync(join(d, '.project-os/heartbeat'), { recursive: true });
+    writeFileSync(join(d, '.project-os/heartbeat/live.json'), JSON.stringify({ phase: 'started', at: new Date().toISOString(), vendor: 'claude' }));
+    writeFileSync(join(d, '.project-os/heartbeat/old.json'), JSON.stringify({ phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' }));
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    return w.status === 0 || `a running session was reported as a failure: ${w.stdout.trim().slice(0, 200)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 14. An OLD started record with no matching done is a real crash and must stay red.
+t('an old "started" with no "done" is still a finding', () => {
+  const d = clone();
+  try {
+    mkdirSync(join(d, '.project-os/heartbeat'), { recursive: true });
+    writeFileSync(join(d, '.project-os/heartbeat/crashed.json'), JSON.stringify({ phase: 'started', at: '2020-01-01T00:00:00.000Z', vendor: 'claude' }));
+    writeFileSync(join(d, '.project-os/heartbeat/ok.json'), JSON.stringify({ phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' }));
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    return (w.status === 1 && /started and never finished/.test(w.stdout)) || `a crashed session was not reported: exit ${w.status} ${w.stdout.trim().slice(0, 160)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 15. A pre-0.7.4 adopter who has not re-vendored still has a working trail.
+t('a legacy single heartbeat.json is still read', () => {
+  const d = clone();
+  try {
+    clearHb(d);
+    writeFileSync(join(d, '.project-os/heartbeat.json'), JSON.stringify({ phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' }));
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    return w.status === 0 || `a legacy heartbeat was not honoured: ${w.stdout.trim().slice(0, 200)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 7. Red freshness
 // 7. Red freshness -> DOCS_STALE, and the owed list is in the payload.
 t('red freshness -> DOCS_STALE with the owed items in the payload', () => {
   const d = clone(); try {
@@ -201,5 +288,5 @@ console.log('\nActivation self-verification — does the shim behave as each ven
 for (const r of results) console.log(`[${r.ok ? '  ok  ' : ' FAIL '}] ${r.name}${r.detail ? `\n           ${r.detail}` : ''}`);
 const fails = results.filter((r) => !r.ok).length;
 console.log(`\nVERDICT: ${fails ? `${fails} FAIL` : 'activation behaves as every vendor expects'}`);
-console.log('\nWhat this cannot verify:\n  - That any vendor actually REGISTERED the hook. No vendor exposes an API for that; only its config file and the heartbeat trail are observable.\n  - That the model read the payload. Injection is observed at stdout, never at the model.\n  - Codex trust: a changed shim hash disables the hook until a human re-trusts it in /hooks, and nothing here can see that.');
+console.log('\nWhat this cannot verify:\n  - That any vendor actually REGISTERED the hook. No vendor exposes an API for that; only its config file and the heartbeat trail are observable.\n  - That the model read the payload. Injection is observed at stdout, never at the model.\n  - Codex trust: it hashes the hooks.json ENTRY (command, timeout, matcher, path), not the shim bytes, so changing activate.mjs does not invalidate it; changing the entry does, and this suite cannot see either.');
 process.exit(fails ? 1 : 0);

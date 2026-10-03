@@ -26,8 +26,9 @@
 import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { writeHeartbeat, heartbeatState, pruneHeartbeats, STRANDED_MS } from './heartbeat.mjs';
 
-const VERSION = '0.7.3';
+const VERSION = '0.7.4';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.
@@ -75,7 +76,6 @@ if (!existsSync(cfgPath)) {
   process.exit(0);
 }
 
-const hbPath = join(root, '.project-os/heartbeat.json');
 
 // Double-fire guard: a plugin hook and an init-copied settings hook can BOTH run
 // on the same session start (Claude runs matching hooks in parallel, no dedupe).
@@ -94,11 +94,15 @@ const emit = (state, body) => {
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text } }) + '\n');
 };
 
-// ---- witness 1: what did the PREVIOUS run leave behind? --------------------
-const prev = readJSON(hbPath);
+// ---- witness 1: what does the trail say? -----------------------------------
+// Per session, never one shared file: nine concurrent activations used to race
+// on heartbeat.json and leave a "started" as the final state, which the
+// watchdog then read as a crash and used to block a real push.
+const HB = heartbeatState(root);
+const prev = HB.latest;
 let inherited = null;
-if (!prev) inherited = 'UNVERIFIED';
-else if (prev.phase === 'started') inherited = 'DEGRADED_PREVIOUS';
+if (HB.stranded.length) inherited = 'DEGRADED_PREVIOUS';
+else if (!prev) inherited = 'UNVERIFIED';
 else {
   const headTime = Date.parse(sh('git log -1 --format=%cI HEAD') || 0);
   const hbTime = Date.parse(prev.at || 0);
@@ -106,10 +110,9 @@ else {
 }
 
 // ---- heartbeat #1 ------------------------------------------------------------
-try {
-  mkdirSync(join(root, '.project-os'), { recursive: true });
-  writeFileSync(hbPath, JSON.stringify({ phase: 'started', at: iso, vendor: VENDOR, version: VERSION, origin: process.env.PROJECT_OS_ORIGIN || 'hook' }, null, 2));
-} catch { /* a failed heartbeat write is reported below, never fatal */ }
+const HB_ID = SESSION || `pid-${process.pid}`;
+writeHeartbeat(root, HB_ID, { phase: 'started', at: iso, vendor: VENDOR, version: VERSION, origin: process.env.PROJECT_OS_ORIGIN || 'hook' });
+pruneHeartbeats(root);
 
 let state = 'HEALTHY';
 let detail = '';
@@ -124,7 +127,7 @@ try {
   else if (meta && meta.docsVerifiedAtCommit && head && meta.docsVerifiedAtCommit !== head) state = 'LATE';
   if (inherited === 'UNVERIFIED' && state === 'HEALTHY') state = 'UNVERIFIED';
   if (inherited === 'BROKEN_ACTIVATION') { state = 'BROKEN_ACTIVATION'; detail = `Last commit is newer than the last heartbeat (${prev.at}). A session happened here without activation firing — the hook is not registered, not trusted, or not running on that machine.`; }
-  else if (inherited === 'DEGRADED_PREVIOUS') detail = `The previous activation (${prev.at}, ${prev.vendor}) started and never finished — it crashed mid-run. Run the doctor.`;
+  else if (inherited === 'DEGRADED_PREVIOUS') detail = `${HB.stranded.length} earlier activation(s) started and never finished (oldest ${HB.stranded[HB.stranded.length - 1].at}, session ${HB.stranded[HB.stranded.length - 1].session}) — those sessions crashed mid-run. Concurrent sessions still running are not counted. Run the doctor.`;
   else if (inherited === 'UNVERIFIED') detail = 'First activation on this machine (no previous heartbeat). Fresh clone or first install — this is expected once. Run the doctor to confirm.';
 
   const docsPath = (cfg.docsPath || 'docs/').replace(/\/?$/, '/');
@@ -145,11 +148,11 @@ try {
     owed ? `OWED RIGHT NOW:\n${owed}` : 'OWED RIGHT NOW: nothing — freshness is green.',
   ].filter(Boolean).join('\n\n');
 
-  writeFileSync(hbPath, JSON.stringify({ phase: 'done', at: iso, vendor: VENDOR, version: VERSION, state, exit: 0, origin: process.env.PROJECT_OS_ORIGIN || 'hook' }, null, 2));
+  writeHeartbeat(root, HB_ID, { phase: 'done', at: iso, vendor: VENDOR, version: VERSION, state, exit: 0, origin: process.env.PROJECT_OS_ORIGIN || 'hook' });
   emit(state, body);
 } catch (e) {
   // THE TRAP: our own crash is still exactly one payload, still exit 0.
-  try { writeFileSync(hbPath, JSON.stringify({ phase: 'done', at: iso, vendor: VENDOR, version: VERSION, state: 'DEGRADED', exit: 1, error: String(e.message || e).slice(0, 200) }, null, 2)); } catch { /* nothing left to do */ }
+  writeHeartbeat(root, HB_ID, { phase: 'done', at: iso, vendor: VENDOR, version: VERSION, state: 'DEGRADED', exit: 1, error: String(e.message || e).slice(0, 200) });
   emit('DEGRADED', `Project-OS activation crashed while running: ${String(e.message || e).slice(0, 300)}\nThe protocol is installed here but its checker did not complete. Say so in your first reply and run the doctor before doing new work.`);
 }
 process.exit(0);

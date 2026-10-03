@@ -2,3 +2,4 @@
 # Project-OS: machine-local activation heartbeat, never committed
 .project-os/heartbeat.json
 .project-os/.activated-*
+.project-os/heartbeat/
