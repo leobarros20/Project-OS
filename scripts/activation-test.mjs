@@ -12,7 +12,7 @@
 import { execSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, unlinkSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
 const GIT = 'git -c user.email=t@local -c user.name=t';
@@ -273,6 +273,150 @@ t('a legacy single heartbeat.json is still read', () => {
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
+// ---------------------------------------------------------------------------
+// 0.7.5: the four installer failures found re-vendoring eight real repos.
+// Each case reproduces the failure first; it is only worth having if it can fail.
+// ---------------------------------------------------------------------------
+
+const INIT = join(ROOT, 'scripts/init.mjs');
+const initIn = (cwd, args = []) => spawnSync(process.execPath, [INIT, ...args], { cwd, encoding: 'utf8', input: '' });
+const scratchRepo = () => {
+  const d = mkdtempSync(join(tmpdir(), 'po-init-'));
+  execSync(`${GIT} init -q`, { cwd: d, stdio: 'pipe' });
+  writeFileSync(join(d, 'README.md'), '# x\n');
+  execSync(`${GIT} add -A && ${GIT} commit -q -m base`, { cwd: d, stdio: 'pipe' });
+  return d;
+};
+
+// 16. A linked worktree has `.git` as a FILE. init applied every step and then
+// crashed with ENOTDIR creating .git/hooks, exiting 1 after the install was done.
+t('init on a git worktree installs everything, including the pre-push hook', () => {
+  const main = scratchRepo();
+  const wt = main + '-wt';
+  try {
+    execSync(`${GIT} worktree add -q "${wt}" -b feature`, { cwd: main, stdio: 'pipe' });
+    if (!existsSync(join(wt, '.git')) || readdirSync(wt).includes('.git') === false) return 'scratch did not create a worktree';
+    const r = initIn(wt);
+    if (/ENOTDIR|Error:/.test(r.stdout + r.stderr)) return `init crashed on a worktree: ${(r.stdout + r.stderr).split('\n').find((l) => /ENOTDIR|Error/.test(l))}`;
+    if (r.status !== 0) return `exit ${r.status}: ${(r.stdout + r.stderr).split('\n').filter(Boolean).slice(-3).join(' | ')}`;
+    const hook = execSync('git rev-parse --git-path hooks', { cwd: wt, encoding: 'utf8' }).trim();
+    return existsSync(resolve(wt, hook, 'pre-push')) || `pre-push was not installed where git keeps hooks (${hook})`;
+  } finally { rmSync(main, { recursive: true, force: true }); rmSync(wt, { recursive: true, force: true }); }
+});
+
+// 17. A REFUSAL must not be mistaken for a complete install, and must not hide
+// what WAS applied. Partial is its own exit code; complete is the only 0.
+t('a refusal exits 3 (not 0, not 1) after applying and observing everything else', () => {
+  const d = scratchRepo();
+  try {
+    const hooks = execSync('git rev-parse --git-path hooks', { cwd: d, encoding: 'utf8' }).trim();
+    mkdirSync(join(d, hooks), { recursive: true });
+    writeFileSync(join(d, hooks, 'pre-push'), '#!/bin/sh\necho foreign\n');
+    const r = initIn(d);
+    if (r.status !== 3) return `a partial install exited ${r.status}, expected 3 (0 would read as complete, 1 as failed)`;
+    if (!/REFUSED/.test(r.stdout)) return 'the refusal was not printed';
+    if (!/RESULT applied=\d+ refused=1 observed=yes/.test(r.stdout)) return `no machine-readable RESULT line: ${r.stdout.split('\n').slice(-3).join(' | ')}`;
+    return existsSync(join(d, '.project-os/activate.mjs')) || 'the refused step stopped the others from being applied';
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('--allow-refusals lets a wrapper continue (exit 0) while the refusal stays visible', () => {
+  const d = scratchRepo();
+  try {
+    const hooks = execSync('git rev-parse --git-path hooks', { cwd: d, encoding: 'utf8' }).trim();
+    mkdirSync(join(d, hooks), { recursive: true });
+    writeFileSync(join(d, hooks, 'pre-push'), '#!/bin/sh\necho foreign\n');
+    const r = initIn(d, ['--allow-refusals']);
+    return (r.status === 0 && /REFUSED/.test(r.stdout) && /refused=1/.test(r.stdout)) || `exit ${r.status}, REFUSED printed: ${/REFUSED/.test(r.stdout)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('a clean install is the only exit 0 without the flag', () => {
+  const d = scratchRepo();
+  try {
+    const r = initIn(d);
+    return (r.status === 0 && /refused=0 observed=yes/.test(r.stdout)) || `exit ${r.status}: ${r.stdout.split('\n').slice(-3).join(' | ')}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 18. The runtime file set is DERIVED from imports. Plant a new import in a copy
+// of the source and the installer must carry it with no edit to init.mjs. The
+// hardcoded list broke the umbrella installer once; this is what stops a second time.
+t('init copies a NEWLY added import without being edited (umbrella and repo paths)', () => {
+  const src = mkdtempSync(join(tmpdir(), 'po-src-'));
+  const umb = mkdtempSync(join(tmpdir(), 'po-umb2-'));
+  const repo = scratchRepo();
+  try {
+    cpSync(ROOT, src, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
+    writeFileSync(join(src, 'activation/newmodule.mjs'), 'export const NEW = 1;\n');
+    const act = join(src, 'activation/activate.mjs');
+    writeFileSync(act, readFileSync(act, 'utf8').replace("import { join } from 'node:path';", "import { join } from 'node:path';\nimport { NEW as _NEW } from './newmodule.mjs';"));
+    // umbrella path: one member installed, session opens on the folder
+    const member = join(umb, 'app');
+    mkdirSync(join(member, '.project-os'), { recursive: true });
+    execSync(`${GIT} init -q`, { cwd: member, stdio: 'pipe' });
+    writeFileSync(join(member, '.project-os/config.json'), '{"tier":"solo","verify":"exit 0"}');
+    spawnSync(process.execPath, [join(src, 'scripts/init.mjs')], { cwd: umb, encoding: 'utf8', input: '' });
+    if (!existsSync(join(umb, '.project-os/newmodule.mjs'))) return 'the umbrella installer did not carry a newly imported module: the file list is hardcoded again';
+    // repo path
+    spawnSync(process.execPath, [join(src, 'scripts/init.mjs')], { cwd: repo, encoding: 'utf8', input: '' });
+    return existsSync(join(repo, '.project-os/newmodule.mjs')) || 'the repo installer did not carry a newly imported module';
+  } finally { for (const x of [src, umb, repo]) rmSync(x, { recursive: true, force: true }); }
+});
+
+// 19. An umbrella install that produces a DEGRADED payload is not an install.
+// The old self-test accepted any payload containing "umbrella=".
+t('umbrella self-test FAILS when a member activation is broken (it used to read OK)', () => {
+  const u = mkdtempSync(join(tmpdir(), 'po-umb3-'));
+  try {
+    const member = join(u, 'app');
+    mkdirSync(join(member, '.project-os'), { recursive: true });
+    execSync(`${GIT} init -q`, { cwd: member, stdio: 'pipe' });
+    writeFileSync(join(member, '.project-os/config.json'), '{"tier":"solo","verify":"exit 0"}');
+    // a member whose own activation cannot start: it imports a module that is not there
+    writeFileSync(join(member, '.project-os/activate.mjs'), "import './does-not-exist.mjs';\n");
+    const r = initIn(u);
+    if (r.status === 0) return 'an umbrella with a broken member exited 0';
+    return /DEGRADED/.test(r.stdout) || `exit ${r.status} but the broken member was not shown as DEGRADED: ${r.stdout.split('\n').slice(-6).join(' | ')}`;
+  } finally { rmSync(u, { recursive: true, force: true }); }
+});
+
+// 20. The per-session heartbeat directory must be gitignored by init. 0.7.4's
+// changelog claimed init did this; it did not, and every session left untracked files.
+t('init gitignores the per-session heartbeat directory', () => {
+  const d = scratchRepo();
+  try {
+    initIn(d, ['--allow-refusals']);
+    const ignored = spawnSync('git', ['check-ignore', '-q', '.project-os/heartbeat/some-session.json'], { cwd: d });
+    return ignored.status === 0 || 'a heartbeat file written by a session would show up as untracked: .project-os/heartbeat/ is not ignored';
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 21. A pre-upgrade `started` with no `done` can never be finished by anything.
+// Once a per-session record exists the legacy file is superseded, not red forever.
+t('a stale legacy "started" is superseded once a per-session record exists', () => {
+  const d = clone();
+  try {
+    clearHb(d);
+    writeFileSync(join(d, '.project-os/heartbeat.json'), JSON.stringify({ phase: 'started', at: '2020-01-01T00:00:00.000Z', vendor: 'claude' }));
+    writeHb(d, 'fresh', { phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' });
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    return w.status === 0 || `a legacy record that nothing can ever finish kept the watchdog red: ${w.stdout.trim().slice(0, 220)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('a stale legacy "started" with NO per-session record stays red, and says how to clear it', () => {
+  const d = clone();
+  try {
+    clearHb(d);
+    writeFileSync(join(d, '.project-os/heartbeat.json'), JSON.stringify({ phase: 'started', at: '2020-01-01T00:00:00.000Z', vendor: 'claude' }));
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    if (w.status !== 1) return `a genuinely stranded legacy record was ignored (exit ${w.status})`;
+    return /run activation once/.test(w.stdout) || `red, but with no instruction for clearing it: ${w.stdout.trim().slice(0, 220)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 7. Red freshness
 // 7. Red freshness
 // 7. Red freshness -> DOCS_STALE, and the owed list is in the payload.
 t('red freshness -> DOCS_STALE with the owed items in the payload', () => {

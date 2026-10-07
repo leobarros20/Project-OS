@@ -57,7 +57,14 @@ const headTime = Date.parse(sh('git log -1 --format=%cI HEAD') || 0);
 // started record is only a finding when it is OLD and its session never
 // finished: with concurrent sessions, records in flight are the normal state.
 const { latest: hb, running, stranded } = heartbeatState(root);
-if (stranded.length) red.push(`trail: ${stranded.length} activation(s) started and never finished (oldest ${stranded[stranded.length - 1].at}, session ${stranded[stranded.length - 1].session})`);
+if (stranded.length) {
+  const oldest = stranded[stranded.length - 1];
+  // A stranded LEGACY record is the one red a person cannot reason their way out
+  // of, so the message says what clears it: running activation once writes a
+  // per-session record, which supersedes the legacy file.
+  const how = oldest.legacy ? ' — this is the pre-0.7.4 single heartbeat.json; run activation once (node .project-os/activate.mjs <tool> </dev/null) and it is superseded' : '';
+  red.push(`trail: ${stranded.length} activation(s) started and never finished (oldest ${oldest.at}, session ${oldest.session})${how}`);
+}
 if (hb && hb.state === 'BROKEN_ACTIVATION') red.push(`trail: last finished activation reported BROKEN_ACTIVATION`);
 if (hb && hb.at && headTime > Date.parse(hb.at) + 60 * 60e3) red.push(`trail: HEAD (${new Date(headTime).toISOString()}) is newer than the last finished activation (${hb.at}) — a session committed here without activation firing`);
 if (!hb && !running.length && !stranded.length) red.push('trail: no activation has ever finished on this machine');

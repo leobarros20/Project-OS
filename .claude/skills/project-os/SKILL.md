@@ -111,4 +111,4 @@ static block into `AGENTS.md` and any `CLAUDE.md`/`GEMINI.md`, adds the
 gitignore lines, installs the pre-push watchdog, then fires activation from the
 root and from a subdirectory. **It refuses what it cannot own** (a foreign
 pre-push, a `core.hooksPath` it did not set, a vendor file that is not JSON)
-rather than producing a dead install. Re-running is safe.
+rather than producing a dead install. Re-running is safe. **Exit codes:** `0` complete and observed (the only 0) · `3` everything that could be applied was, and seen firing, but items were REFUSED and need a human · `1` activation did not fire · `2` pre-flight. The last line is always `RESULT applied=N refused=M observed=yes|no`; `--allow-refusals` maps 3 to 0 for a wrapper that handles the printed list itself. Works in a git worktree.

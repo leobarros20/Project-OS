@@ -51,8 +51,17 @@ export function allHeartbeats(root) {
       if (r && r.at) out.push({ ...r, session: f.replace(/\.json$/, '') });
     }
   } catch { /* no directory yet */ }
-  const legacy = readJSON(join(root, '.project-os/heartbeat.json'));
-  if (legacy && legacy.at) out.push({ ...legacy, session: 'legacy', legacy: true });
+  // The pre-0.7.4 single file is a FALLBACK, and only while the per-session
+  // directory is empty. Once any per-session record exists the legacy file is
+  // SUPERSEDED and ignored. Reading both forever was a trap: a legacy "started"
+  // that crashed before the upgrade can never be finished by anything — every
+  // new activation writes its own file — so under the age rule it stayed red on
+  // every push until somebody deleted the file by hand. Observed on a real
+  // umbrella member whose last pre-upgrade activation had hung.
+  if (!out.length) {
+    const legacy = readJSON(join(root, '.project-os/heartbeat.json'));
+    if (legacy && legacy.at) out.push({ ...legacy, session: 'legacy', legacy: true });
+  }
   return out.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0));
 }
 

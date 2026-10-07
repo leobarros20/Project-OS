@@ -28,7 +28,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 
 import { join } from 'node:path';
 import { writeHeartbeat, heartbeatState, pruneHeartbeats, STRANDED_MS } from './heartbeat.mjs';
 
-const VERSION = '0.7.4';
+const VERSION = '0.7.5';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.

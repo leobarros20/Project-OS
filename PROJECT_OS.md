@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.7.4
+**Status:** Working draft · 0.7.5
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -1237,6 +1237,13 @@ clauses are references, not a claim of certification — see the note at the end
 |---|---|---|---|
 | [what is actually done] | [framework clause refs] | [path in this repo] | [generated artifact, or "none yet"] |
 
+## Level per surface
+
+| Surface | Level | What puts it there | Evidence |
+|---|---|---|---|
+| [client app · API · data store · billing · public forms · AI calls] | [1 / 2 / 3] | [the control that earns the level, or the gap that caps it] | [path, or "none yet"] |
+
+The project's level is the LOWEST row. See the ladder in the rules below.
 ## Not applicable yet
 
 | Control family | Why not yet | Revisit when |
@@ -1258,6 +1265,12 @@ certified". Certification audits an organization; this file is one input.
 - **Every named evidence artifact is classified in the freshness manifest** — `GENERATED` with its emitter where something regenerates it, `CALENDAR` where a person or a ritual produces it on a cadence. The catalog itself is `DESCRIPTIVE`: it changes when the controls change, not on a clock.
 - **The check reads the manifest, not this file.** The freshness check does not parse these tables; an evidence artifact that is not in the manifest is simply unclassified there, which is already red. One mechanism, not two — a parser for this file would be a second place to get the rules wrong.
 - **`Not applicable yet` is a real row, not an omission.** It names what is absent and what would change that. A blank catalog and a catalog that says "no users yet, revisit at first signup" look identical to a checker and completely different to a reader.
+- **Security has rungs, and the bottom rung is a release blocker, not a starting point.** The `Level per surface` table states, for every surface the project exposes, which rung it stands on, and the project's level is the lowest row — one surface at level 1 puts the whole project at level 1. The three rungs, in the order they are climbed:
+  - **Level 1 — a secret ships in the client, authorization is not enforced per row, or the paywall is decided client-side.** Any one of these on any surface blocks a release. It is not a phase to pass through; it is the state a project must leave before anyone outside the team can reach it.
+  - **Level 2 — secrets live only server-side; every table or collection has per-row rules, each tested by omitting the identity (a request with no user, and with the wrong user, must fail); entitlement is checked on the server against the billing provider's own record, never against a flag the client sent.** The minimum before the first real user.
+  - **Level 3 — rate limits on signup, login and every metered call (AI calls first); hard spend caps that fail closed when the cap is reached; bot protection on public forms; a security audit committed to the repo as evidence.** The gate for launch.
+  
+  A level is a claim until its evidence column names a file; `none yet` is an honest row, a level with no evidence is not. The evidence artifacts a rung relies on (the audit, the rule tests, the cap configuration) are classified in the freshness manifest like every other evidence artifact in this catalog.
 
 ---
 

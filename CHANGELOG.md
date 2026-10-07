@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.4
+**Current version:** 0.7.5
 
 This file does two jobs:
 
@@ -19,6 +19,41 @@ This file does two jobs:
 5. Record the update in the project's `JOURNAL.md`.
 
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
+
+---
+
+## 0.7.5 — 2026-10-07
+
+### What changed
+
+Four installer failures found by re-vendoring 0.7.4 across eight real repos, plus a fifth that the same pass should have found and did not. Every one is reproduced by a test that fails against the old code before it passes against the new.
+
+- **`init` crashed on a git worktree.** In a linked worktree `.git` is a *file*, so creating `.git/hooks` died with `ENOTDIR` — **after** every other step had already been applied, which made it look like a failed install that had in fact mostly succeeded. Worktrees are the branch-per-worker model this OS recommends, so the installer meets them constantly. The hooks directory is now asked of git (`git rev-parse --git-path hooks`). Hooks are shared by every worktree of a repository, so this installs once for all of them.
+- **A refusal no longer reads as a complete install, and no longer hides what was applied.** `init` used to exit 1 for a refusal, which aborted every wrapper around it before the steps that came *after* the refused one. It was applied-and-observed, then reported as failed. Exit codes now say what happened: **0** is complete and observed and is the *only* 0; **3** is "everything that could be applied was, and seen firing, and N items need a human"; **1** is a real failure; **2** is a pre-flight problem. A final `RESULT applied=N refused=M observed=yes|no` line is machine-readable. `--allow-refusals` maps 3 to 0 for a wrapper that handles the printed list itself. *This is deliberately not "exit 0 when the non-refused steps applied"*: a caller that checks only the exit status would then read a partial install as finished, which is exactly how a broken install goes unnoticed.
+- **The runtime files `init` copies are derived from what the entry points import**, not typed into a list. 0.7.4 fixed the umbrella installer by adding `heartbeat.mjs` to a hardcoded list — the same mechanism that had just broken it, and it would have broken on the next import. Add an import to `activate.mjs` and `init` carries the file with no edit. A test plants a new import and checks both installer paths copy it.
+- **The umbrella self-test no longer passes a broken install.** It accepted any payload containing `umbrella=`, so a `DEGRADED` result — a member's activation that could not start — read as OK. It now fails on `DEGRADED` and prints each member's state. The repo self-test fails on `DEGRADED` too.
+- **A pre-upgrade `started` heartbeat is superseded, not red forever.** The legacy single `heartbeat.json` is now read only while the per-session directory is empty. A legacy `started` that crashed before the upgrade can never be finished by anything — every new activation writes its own file — so under the age rule it stayed red on every push until somebody deleted the file by hand. When it *is* the only record and genuinely stranded, the watchdog now says what clears it: run activation once.
+
+### Correction to 0.7.4
+
+**0.7.4's migration said `init` adds `.project-os/heartbeat/` to `.gitignore`. It did not.** The line was added to the spec repo's own `.gitignore` and never to the list `init` writes, so in every repo re-vendored with 0.7.4 each session left untracked files in `git status` — confirmed in two adopters before this release. `init` now writes it. This is the third time a claim of this kind has gone into this changelog without anyone opening the file it was about; the record is left standing rather than rewritten.
+
+### Reported, and not reproduced
+
+The report said the umbrella installer copies `activate.mjs` but not `heartbeat.mjs`. At the published 0.7.4 it does: an umbrella install writes both. It could have come from an older copy of `init.mjs`, or from a member re-vendored before the dispatcher. The structural cause — a hardcoded file list — was real and is fixed regardless; the specific symptom is not claimed as reproduced.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.5 versions.
+2. **Re-vendor every adopting repo with `project-os init`** (and every umbrella folder). Re-running is safe. Worktrees now work.
+3. A wrapper around `init` should treat **exit 3 as "continue, then surface the REFUSED list"**, or pass `--allow-refusals` and read the `RESULT` line. Exit 1 is the only failure.
+4. If a repo's `git status` shows untracked files under `.project-os/heartbeat/`, that is the 0.7.4 gitignore gap: the re-vendor above writes the line.
+5. If the watchdog is red with "the pre-0.7.4 single heartbeat.json", run activation once; the legacy file is then superseded and ignored.
+6. `JOURNAL.md` entry for the upgrade.
+
+### Also in 0.7.5 — the security ladder (spec change, `PROJECT_OS.md` 3.23 and `PROJECT_OS_BEHAVIOR.md` Part 5)
+
+The controls catalog (3.23) gains a **`Level per surface`** table and a rule that defines three rungs: **level 1** (a secret in the client, no per-row authorization, a client-decided paywall) blocks a release; **level 2** (server-side secrets, per-row rules on every table tested by omitting the identity, entitlement checked server-side against the billing provider) is the minimum before the first real user; **level 3** (rate limits on signup, login and metered calls, hard spend caps that fail closed, bot protection on public forms, a committed security audit) is the launch gate. The project's level is the lowest row. Bootstrap step **12b** fills the table before any user exists. Routed from an adopter's playbook, where it was applied first; generalizable because the rungs are about where secrets, authorization and entitlement are decided, not about any one stack. The freshness check is unchanged: the table is prose in a `DESCRIPTIVE` artifact, and the evidence it names is classified in the manifest like every other row (3.23's "the check reads the manifest, not this file").
 
 ---
 

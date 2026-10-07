@@ -1,5 +1,32 @@
 # Journal — Project-OS
 
+## 2026-10-07 · Project OS Team lead (Claude)
+
+### Done
+- **0.7.5: five installer failures, each reproduced before it was fixed.** Four came from re-vendoring 0.7.4 across eight real repos (reported 10-06 with evidence in the learnings log); the fifth, the `.gitignore` line for the heartbeat directory, I found by opening the file the 0.7.4 changelog made a claim about. Eleven new activation-test cases; all eleven fail against the 0.7.4 code and pass against 0.7.5 — the pre-fix run is in the release notes, not just asserted.
+- **`init` on a worktree** works: the hooks directory is asked of git, not joined from `.git/`.
+- **`init` exit codes say what happened.** 0 is complete-and-observed and is the only 0; 3 is applied-and-observed-with-refusals; 1 is a failure. A `RESULT applied= refused= observed=` line closes every run. `--allow-refusals` is for a wrapper that handles the printed list. I deliberately did not do what the report proposed (exit 0 when the non-refused steps applied): a wrapper that checks only the exit status would then read a partial install as finished.
+- **The runtime file list is derived from imports.** 0.7.4 fixed the umbrella installer by extending a hardcoded list, which is the mechanism that broke it. A test plants a new import in a copy of the source and checks both installer paths carry it.
+- **Both self-tests fail on `DEGRADED`.** The umbrella one accepted any payload with `umbrella=` in it, so a member whose activation could not start read as an installed umbrella.
+- **A legacy `heartbeat.json` is superseded** once any per-session record exists. When it is genuinely the only record and stranded, the watchdog says what clears it.
+- **The security ladder** routed into 3.23 (a `Level per surface` table and the three-rung rule) and bootstrap step 12b. Spec stays neutral: no vendor names, no product names.
+
+### Reported, and not reproduced
+- "The umbrella installer copies `activate.mjs` but not `heartbeat.mjs`." At the published 0.7.4 it copies both; I ran it. The structural cause (a hardcoded list) was real and is gone; the symptom is not claimed as reproduced. Possibly an older `init.mjs`, possibly a member re-vendored before its umbrella.
+
+### Corrected in 0.7.4's record
+- Its migration said `init` adds `.project-os/heartbeat/` to `.gitignore`. It did not; the line went into this repo's `.gitignore` and never into the list `init` writes. Two adopters confirmed: the directory exists and is not ignored. Third time a changelog claim of this kind went in without opening the file it was about. The correction stands inside the 0.7.5 entry; 0.7.4's text is left as written.
+
+### Open, not mine to fix
+- An umbrella member's own activation was timing out on 10-04 (no payload within the dispatcher's budget), surfaced only as the umbrella's `DEGRADED`. Whether the 10-06 re-vendor cleared it, I have not seen. Its lead's.
+- One adopter's `verify` command is red on its own watchdog ledger and took over five minutes from my shell. Its lead's.
+
+### Decisiones pendientes de Leo
+1. **Registrar el hook de activación en el propio `.claude/settings.json` de project-OS.** Hoy nadie trabaja acá por hook; corro la activación a mano al cerrar sesión. Si alguien abre este repo sin saberlo, no hay activación. Decisión abierta desde 0.6.
+2. **Exención del repo del spec en su propia deuda de self-host** (DEBT `self-host-1/2/3`, vencen 2026-10-15 y 2026-11-15). O el repo del spec se adopta a sí mismo en serio (hook + watchdog programado), o se declara exento con una fila explícita. Lo que no puede pasar es que venza en silencio.
+3. **Párrafo del studio sobre `openai/codex-plugin-cc` y Codex 0.154 (read-only mientras hay un writer activo).** Lo escribí como hipótesis; pediste probarlo vos antes de que entre al spec.
+4. **Modelo de esta sesión.** Según los avisos del sistema, los parches y tests de 0.7.5 corrieron bajo Sonnet 5.5 (la orquestación dijo haberlo cambiado por cuota) y el ruteo de la escalera más el cierre de release bajo Fable 5.1. Si querés que el texto del spec lo revise el modelo mayor antes de que un adoptante lo lea, es tu decisión, no la mía.
+
 ## 2026-10-03 · Project OS Team lead (Claude)
 
 ### Done

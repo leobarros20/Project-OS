@@ -38,6 +38,40 @@ const did = (what) => { plan.push(what); say(`${DRY ? '[dry-run] would' : '  ✓
 const refuse = (why) => { say(`  ✗ REFUSED: ${why}`); refused.push(why); };
 const refused = [];
 
+// ------------------------------------------------- the runtime is a DERIVED set
+// The files init copies are whatever the entry points actually import, found by
+// reading them, never a list typed here. A hardcoded list broke the umbrella
+// installer when heartbeat.mjs was added, and the next import would have broken
+// it again: a list that must be remembered is the failure this project keeps
+// meeting. Add an import to activate.mjs and init copies the file with no edit.
+const activationDir = join(SRC, 'activation');
+const importsOf = (entry, seen) => {
+  if (seen.has(entry)) return seen;
+  seen.add(entry);
+  let text = '';
+  try { text = readFileSync(join(activationDir, entry), 'utf8'); } catch { return seen; }
+  for (const m of text.matchAll(/from\s+['"]\.\/([A-Za-z0-9_.-]+\.mjs)['"]/g)) importsOf(m[1], seen);
+  return seen;
+};
+const runtimeFor = (entries) => { const s = new Set(); for (const e of entries) importsOf(e, s); return [...s]; };
+
+// Exit codes. Complete and observed is the ONLY 0: a wrapper that checks only the
+// exit status must never mistake a partial install for a finished one.
+const EXIT = { OK: 0, FAILED: 1, PREFLIGHT: 2, REFUSALS: 3 };
+const finish = ({ observed }) => {
+  const fatal = !observed;
+  say(`\nRESULT applied=${plan.length} refused=${refused.length} observed=${observed ? 'yes' : 'no'}`);
+  if (fatal) process.exit(EXIT.FAILED);
+  if (refused.length) {
+    // Everything that could be applied WAS, and it was seen firing; what is left
+    // is a human's to finish. --allow-refusals lets a wrapper keep going while it
+    // handles the printed list itself, instead of aborting before the steps that
+    // came after the refused one.
+    process.exit(flag('--allow-refusals') ? EXIT.OK : EXIT.REFUSALS);
+  }
+  process.exit(EXIT.OK);
+};
+
 // ---------------------------------------------------------------- pre-flight
 let root;
 try { root = execSync('git rev-parse --show-toplevel', { cwd: TARGET, encoding: 'utf8', stdio: 'pipe' }).trim(); }
@@ -50,14 +84,14 @@ catch {
   say(`Project-OS init → UMBRELLA ${TARGET}${DRY ? '  (dry run, nothing written)' : ''}`);
   say(`  members: ${members.join(', ')}`);
   const wrU = (rel, content) => { if (!DRY) { mkdirSync(dirname(join(TARGET, rel)), { recursive: true }); writeFileSync(join(TARGET, rel), content); } };
-  // activate.mjs imports ./heartbeat.mjs, so the dispatcher needs both: copying
-  // only the dispatcher is how the umbrella installer broke when that import
-  // was added, caught by the umbrella test rather than by an adopter.
+  // The dispatcher needs everything it imports. That set is DERIVED from its
+  // imports (see runtimeFor), so a future import cannot silently re-break this.
+  const umbrellaFiles = runtimeFor(['activate.mjs']);
   if (!DRY) {
     mkdirSync(join(TARGET, '.project-os'), { recursive: true });
-    for (const f of ['activate.mjs', 'heartbeat.mjs']) copyFileSync(join(SRC, 'activation', f), join(TARGET, '.project-os', f));
+    for (const f of umbrellaFiles) copyFileSync(join(SRC, 'activation', f), join(TARGET, '.project-os', f));
   }
-  say(`${DRY ? '[dry-run] would' : '  ✓'} write .project-os/activate.mjs (the umbrella dispatcher)`);
+  say(`${DRY ? '[dry-run] would' : '  ✓'} write the umbrella dispatcher and what it imports: ${umbrellaFiles.map((f) => '.project-os/' + f).join(', ')}`);
   const declPath = join(TARGET, '.project-os/umbrella.json');
   if (existsSync(declPath)) say('  = .project-os/umbrella.json exists, not touched');
   else { say(`${DRY ? '[dry-run] would' : '  ✓'} write .project-os/umbrella.json declaring ${members.length} member(s)`); wrU('.project-os/umbrella.json', JSON.stringify({ _comment: 'Members of this umbrella. A declaration survives a rename and says which repos a human meant; without it activation falls back to a one-level scan.', members: members.map((m) => ({ name: m, path: m })) }, null, 2) + '\n'); }
@@ -70,15 +104,22 @@ catch {
     cur.hooks.SessionStart.push(tpl.hooks.SessionStart[0]);
     say(`${DRY ? '[dry-run] would' : '  ✓'} merge SessionStart hook into ${t}`); wrU(t, JSON.stringify(cur, null, 2) + '\n');
   }
-  if (DRY) { say('\nRun without --dry-run to apply. Each member repo still needs its own init.'); process.exit(0); }
+  if (DRY) { say('\nRun without --dry-run to apply. Each member repo still needs its own init.'); finish({ observed: true }); }
   const r = spawnSync(process.execPath, [join(TARGET, '.project-os/activate.mjs'), 'init-selftest'], { cwd: TARGET, encoding: 'utf8', input: JSON.stringify({ session_id: `init-umb-${Date.now()}`, source: 'startup' }) });
-  let head = null; try { head = JSON.parse(r.stdout.trim()).hookSpecificOutput.additionalContext.split('\n')[0]; } catch { /* none */ }
-  say('\nSelf-test — one payload naming every member:');
-  say(`  ${head && /umbrella=/.test(head) ? 'OK   ' + head : 'FAIL ' + (head || `exit ${r.status}, no payload`)}`);
-  say(head && /umbrella=/.test(head)
+  let ctx = null; try { ctx = JSON.parse(r.stdout.trim()).hookSpecificOutput.additionalContext; } catch { /* none */ }
+  const head = ctx ? ctx.split('\n')[0] : null;
+  const state = head ? (head.match(/state=([A-Z_]+)/) || [, ''])[1] : '';
+  // A payload that merely EXISTS is not a pass. DEGRADED means the dispatcher or a
+  // member's own activation broke (a missing import lands here), and the old test
+  // accepted any line containing "umbrella=", so a DEGRADED install read as OK.
+  const good = !!head && /umbrella=/.test(head) && state !== 'DEGRADED';
+  say('\nSelf-test — one payload naming every member, and none of them broken:');
+  say(`  ${good ? 'OK   ' : 'FAIL '}${head || `exit ${r.status}, no payload`}`);
+  if (ctx) for (const l of ctx.split('\n').filter((x) => /^\s{2}\S.*: state=/.test(x))) say(l);
+  say(good
     ? '\nUmbrella installed and OBSERVED. Each member repo still needs its own init (run this from inside each one).'
     : '\nNOT a working umbrella install. Fix and re-run; re-running is safe.');
-  process.exit(head && /umbrella=/.test(head) ? 0 : 1);
+  finish({ observed: good });
 }
 say(`Project-OS init → ${root}${DRY ? '  (dry run, nothing written)' : ''}`);
 const version = JSON.parse(readFileSync(join(SRC, 'version.json'), 'utf8')).version;
@@ -90,7 +131,7 @@ const wr = (rel, content, mode) => { if (!DRY) { mkdirSync(dirname(join(root, re
 const readJSON = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 
 // ------------------------------------------------------- 1. the runtime files
-for (const f of ['activate.mjs', 'heartbeat.mjs', 'shim.sh', 'watchdog.mjs']) {
+for (const f of [...runtimeFor(['activate.mjs', 'watchdog.mjs']), 'shim.sh']) {
   const src = join(SRC, 'activation', f), dst = join(root, '.project-os', f);
   const same = existsSync(dst) && readFileSync(src, 'utf8') === readFileSync(dst, 'utf8');
   if (same) { say(`  = .project-os/${f} already current`); continue; }
@@ -162,7 +203,7 @@ for (const f of instrFiles) {
 
 // ------------------------------------------------------------- 5. gitignore
 const gi = join(root, '.gitignore'); const giCur = existsSync(gi) ? readFileSync(gi, 'utf8') : '';
-const giLines = ['.project-os/heartbeat.json', '.project-os/.activated-*', '.project-os/studio/review-pending'].filter((l) => !giCur.split('\n').includes(l));
+const giLines = ['.project-os/heartbeat.json', '.project-os/heartbeat/', '.project-os/.activated-*', '.project-os/studio/review-pending'].filter((l) => !giCur.split('\n').includes(l));
 if (giLines.length) { did(`add ${giLines.length} line(s) to .gitignore`); if (!DRY) appendFileSync(gi, (giCur && !giCur.endsWith('\n') ? '\n' : '') + '# Project-OS: machine-local state\n' + giLines.join('\n') + '\n'); }
 else say('  = .gitignore current');
 
@@ -170,28 +211,40 @@ else say('  = .gitignore current');
 const prePushSrc = readFileSync(join(SRC, 'activation/templates/pre-push'), 'utf8');
 if (hooksPath) refuse(`core.hooksPath is set to "${hooksPath}" and I did not set it — add the pre-push watchdog there yourself (activation/templates/pre-push)`);
 else {
-  const hp = join(root, '.git/hooks/pre-push');
+  // Ask git where hooks live. In a linked worktree `.git` is a FILE pointing at
+  // the main checkout, so joining '.git/hooks' crashed with ENOTDIR AFTER every
+  // other step had already been applied. Hooks are shared by every worktree of a
+  // repository, so this installs once for all of them.
+  const hooksDir = (() => {
+    try { return resolve(root, execSync('git rev-parse --git-path hooks', { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim()); }
+    catch { return join(root, '.git/hooks'); }
+  })();
+  const hp = join(hooksDir, 'pre-push');
+  const hpLabel = hp.split('\\').join('/').replace(root.split('\\').join('/') + '/', '');
   const cur = existsSync(hp) ? readFileSync(hp, 'utf8') : '';
-  if (cur && !/id:watchdog-pre-push/.test(cur)) refuse('.git/hooks/pre-push exists and is not mine — I will not overwrite a hook I did not write; chain the watchdog into it by hand');
-  else if (cur === prePushSrc) say('  = .git/hooks/pre-push current');
-  else { did('install .git/hooks/pre-push (watchdog)'); wr('.git/hooks/pre-push', prePushSrc, 0o755); }
+  if (cur && !/id:watchdog-pre-push/.test(cur)) refuse(`${hpLabel} exists and is not mine — I will not overwrite a hook I did not write; chain the watchdog into it by hand`);
+  else if (cur === prePushSrc) say(`  = ${hpLabel} current`);
+  else { did(`install ${hpLabel} (watchdog)`); if (!DRY) { mkdirSync(hooksDir, { recursive: true }); writeFileSync(hp, prePushSrc); chmodSync(hp, 0o755); } }
 }
 
 // ------------------------------------------------ 7. self-test: observe it
-if (DRY) { say(`\nPlan: ${plan.length} change(s)${refused.length ? `, ${refused.length} refused` : ''}. Run without --dry-run to apply.`); process.exit(refused.length ? 1 : 0); }
+if (DRY) { say(`\nPlan: ${plan.length} change(s)${refused.length ? `, ${refused.length} refused` : ''}. Run without --dry-run to apply.`); finish({ observed: true }); }
 
 const fire = (cwd, label) => {
   const r = spawnSync(process.execPath, [join(root, '.project-os/activate.mjs'), 'init-selftest'], { cwd, encoding: 'utf8', input: JSON.stringify({ session_id: `init-${label}-${Date.now()}`, source: 'startup' }) });
   const line = (() => { try { return JSON.parse(r.stdout.trim()).hookSpecificOutput.additionalContext.split('\n')[0]; } catch { return null; } })();
-  return { ok: r.status === 0 && !!line && /^PROJECT-OS v[\d.]+ ACTIVE /.test(line), line, code: r.status };
+  return { ok: r.status === 0 && !!line && /^PROJECT-OS v[\d.]+ ACTIVE /.test(line) && !/state=DEGRADED/.test(line), line, code: r.status };
 };
 say('\nSelf-test — the install is not done until it has been seen firing:');
 const sub = join(root, '.project-os');
 const a = fire(root, 'root'), b = fire(sub, 'subdir');
 say(`  from repo root:     ${a.ok ? 'OK  ' : 'FAIL'} ${a.line || `exit ${a.code}, no payload`}`);
 say(`  from a subdirectory: ${b.ok ? 'OK  ' : 'FAIL'} ${b.line || `exit ${b.code}, no payload`}`);
-const ok = a.ok && b.ok && !refused.length;
+const observed = a.ok && b.ok;
+const ok = observed && !refused.length;
 say(ok
   ? `\nInstalled and OBSERVED. Next: set "verify" in .project-os/config.json, run node .project-os/watchdog.mjs --source manual once, and schedule it weekly (activation/templates/schedule.md).`
-  : `\nNOT a working install${refused.length ? ` — ${refused.length} item(s) refused above` : ' — activation did not fire from one of the two locations'}. Fix and re-run; re-running is safe.`);
-process.exit(ok ? 0 : 1);
+  : observed
+    ? `\nInstalled and OBSERVED, but ${refused.length} item(s) were REFUSED above and need a human. Everything else was applied and seen firing; re-running is safe.`
+    : `\nNOT a working install — activation did not fire from one of the two locations. Fix and re-run; re-running is safe.`);
+finish({ observed });
