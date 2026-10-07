@@ -23,7 +23,8 @@
 // as permanent, and a run killed mid-way silenced its session forever.
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { execSync } from 'node:child_process';
 
 // A session that started longer ago than this is not still running.
 export const STRANDED_MS = 60 * 60e3;
@@ -37,10 +38,35 @@ export const DEDUP_MS = 60e3;
 /** The one sentence a person needs when a stranded record is reported: which file holds it, and the command that finishes that session. */
 export function clearHint(rec, vendor = '<tool>') {
   if (rec.legacy) return 'this is the pre-0.7.4 single heartbeat.json; run activation once (node .project-os/activate.mjs ' + vendor + ' </dev/null) and it is superseded';
-  return `file .project-os/heartbeat/${rec.session}.json — finish that session: printf '{"session_id":"${rec.session}"}' | node .project-os/activate.mjs ${vendor}  (or delete the file if that session is gone for good)`;
+  return `file ${posix(rec.file || rec.session + '.json')} — finish that session: printf '{"session_id":"${rec.session}"}' | node .project-os/activate.mjs ${vendor}  (or delete the file if that session is gone for good)`;
 }
 
-const dir = (root) => join(root, '.project-os/heartbeat');
+// WHERE THE TRAIL LIVES: in the clone's git common dir, not in the working
+// tree. Through 0.7.7 it was `.project-os/heartbeat/` under the checkout, which
+// meant three things an adopter's QA log recorded one after another: a NEW
+// WORKTREE started with no trail and its first push was red with "no activation
+// has ever finished"; `git clean`/`git stash -u` took the trail with the rest of
+// the untracked files; and every worktree of one clone kept a separate idea of
+// what had happened on this machine. The git dir is shared by every worktree of
+// a clone, never touched by clean or stash, and never committed — which is what
+// "machine-local" was always supposed to mean. An umbrella folder is not a
+// repo, so it keeps the trail under its own `.project-os/`. Records written by
+// 0.7.4–0.7.7 into the old location are still read, as a fallback, until the
+// new location has entries.
+const trailCache = new Map();
+export function trailDir(root) {
+  if (trailCache.has(root)) return trailCache.get(root);
+  let d;
+  try { d = join(resolve(root, execSync('git rev-parse --git-common-dir', { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim()), 'project-os'); }
+  catch { d = join(root, '.project-os'); }
+  trailCache.set(root, d);
+  return d;
+}
+const dir = (root) => join(trailDir(root), 'heartbeat');
+const legacyDir = (root) => join(root, '.project-os/heartbeat');
+/** The double-fire marker for a session, beside the trail. */
+export const markerPath = (root, sid) => join(trailDir(root), 'activated-' + safe(sid));
+const posix = (p) => String(p).split('\\').join('/');
 const safe = (s) => String(s || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || `pid-${process.pid}`;
 const readJSON = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
 
@@ -59,13 +85,16 @@ export function writeHeartbeat(root, id, record) {
  */
 export function allHeartbeats(root) {
   const out = [];
-  try {
-    for (const f of readdirSync(dir(root))) {
-      if (!f.endsWith('.json')) continue;
-      const r = readJSON(join(dir(root), f));
-      if (r && r.at) out.push({ ...r, session: f.replace(/\.json$/, '') });
-    }
-  } catch { /* no directory yet */ }
+  for (const d of [dir(root), legacyDir(root)]) {
+    try {
+      for (const f of readdirSync(d)) {
+        if (!f.endsWith('.json')) continue;
+        const r = readJSON(join(d, f));
+        if (r && r.at) out.push({ ...r, session: f.replace(/\.json$/, ''), file: join(d, f) });
+      }
+    } catch { /* no directory yet */ }
+    if (out.length) break; // the old location is a fallback, not a second source
+  }
   // The pre-0.7.4 single file is a FALLBACK, and only while the per-session
   // directory is empty. Once any per-session record exists the legacy file is
   // SUPERSEDED and ignored. Reading both forever was a trap: a legacy "started"
@@ -75,7 +104,7 @@ export function allHeartbeats(root) {
   // umbrella member whose last pre-upgrade activation had hung.
   if (!out.length) {
     const legacy = readJSON(join(root, '.project-os/heartbeat.json'));
-    if (legacy && legacy.at) out.push({ ...legacy, session: 'legacy', legacy: true });
+    if (legacy && legacy.at) out.push({ ...legacy, session: 'legacy', legacy: true, file: join(root, '.project-os/heartbeat.json') });
   }
   return out.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0));
 }

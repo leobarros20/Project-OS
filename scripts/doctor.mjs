@@ -19,6 +19,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { heartbeatState, clearHint } from '../activation/heartbeat.mjs';
 
 const JSON_OUT = process.argv.includes('--json');
 const ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
@@ -53,9 +54,12 @@ check('activation', 'Does activation behave as every vendor expects, and has it 
     const fails = suite.out.split('\n').filter((l) => l.includes('[ FAIL ]')).map((l) => l.replace(/.*\]\s*/, ''));
     return { state: 'FAIL', detail: `vendor simulation failed: ${fails.join(' · ') || suite.out.slice(-200)}` };
   }
-  const hb = existsSync(join(ROOT, '.project-os/heartbeat.json')) ? JSON.parse(readFileSync(join(ROOT, '.project-os/heartbeat.json'), 'utf8')) : null;
+  // The real trail, through the shared helper. Through 0.7.7 this read the
+  // pre-0.7.4 single heartbeat.json, so the doctor reported a weeks-old record
+  // as "last real heartbeat" while the per-session directory held the truth.
+  const { latest: hb, stranded } = heartbeatState(ROOT);
+  if (stranded.length) return { state: 'FAIL', detail: `${stranded.length} activation(s) started and never finished — ${clearHint(stranded[stranded.length - 1])}` };
   if (!hb) return { state: 'WARN', detail: 'shim behaves correctly for claude/codex/gemini (simulated), but no heartbeat exists on this machine — activation has never fired here for real. Expected on a spec repo nobody works in; a defect on a product repo.' };
-  if (hb.phase === 'started') return { state: 'FAIL', detail: `last activation (${hb.at}) started and never finished — it crashed mid-run` };
   if (hb.state === 'BROKEN_ACTIVATION') return { state: 'FAIL', detail: `last activation reported BROKEN_ACTIVATION at ${hb.at}: a commit landed with no session heartbeat — a hook is unregistered, untrusted or dead on some machine` };
   const wired = ['.claude/settings.json', '.codex/hooks.json', '.gemini/settings.json'].filter((f) => existsSync(join(ROOT, f)) && /SessionStart/.test(readFileSync(join(ROOT, f), 'utf8')));
   return { state: 'PASS', detail: `simulated claude/codex/gemini all pass; last real heartbeat ${hb.at} [${hb.vendor}] state=${hb.state}${wired.length ? `; repo-level wiring present for: ${wired.join(', ')}` : '; no repo-level vendor config here (activation ships via the plugin)'}` };

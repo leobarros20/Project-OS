@@ -25,10 +25,10 @@
 
 import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { writeHeartbeat, heartbeatState, allHeartbeats, pruneHeartbeats, clearHint, STRANDED_MS, DEDUP_MS } from './heartbeat.mjs';
+import { join, dirname } from 'node:path';
+import { writeHeartbeat, heartbeatState, allHeartbeats, pruneHeartbeats, clearHint, markerPath, STRANDED_MS, DEDUP_MS } from './heartbeat.mjs';
 
-const VERSION = '0.7.7';
+const VERSION = '0.7.8';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.
@@ -82,7 +82,7 @@ if (!existsSync(cfgPath)) {
 // One payload per session: the second activation exits quietly.
 //
 // The marker is a CLAIM that a run for this session is in flight or finished,
-// never a permanent lock. Through 0.7.7 it was permanent: a run killed mid-way
+// never a permanent lock. Through 0.7.8 it was permanent: a run killed mid-way
 // (its vendor's timeout, a harness stopping a background command, a session
 // cut) left the marker and a `started` heartbeat behind, every later fire for
 // that session exited here in silence, so nothing could ever write the `done`
@@ -93,13 +93,13 @@ if (!existsSync(cfgPath)) {
 // session has a finished record; otherwise this fire is the relaunch.
 if (SESSION) {
   const sid = SESSION.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
-  const seen = join(root, '.project-os/.activated-' + sid);
+  const seen = markerPath(root, sid); // beside the trail, in the clone's git dir
   if (existsSync(seen)) {
     const startedAt = (() => { try { const t = Date.parse(readFileSync(seen, 'utf8').trim()); return Number.isNaN(t) ? statSync(seen).mtimeMs : t; } catch { return 0; } })();
     const finished = allHeartbeats(root).some((r) => r.session === sid && r.phase === 'done');
     if (finished || Date.now() - startedAt < DEDUP_MS) process.exit(0);
   }
-  try { mkdirSync(join(root, '.project-os'), { recursive: true }); writeFileSync(seen, iso); } catch {}
+  try { mkdirSync(dirname(seen), { recursive: true }); writeFileSync(seen, iso); } catch {}
 }
 const sh = (c) => { try { return execSync(c, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(); } catch { return ''; } };
 const readJSON = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
@@ -144,7 +144,7 @@ try {
   if (inherited === 'UNVERIFIED' && state === 'HEALTHY') state = 'UNVERIFIED';
   if (inherited === 'BROKEN_ACTIVATION') { state = 'BROKEN_ACTIVATION'; detail = `Last commit is newer than the last heartbeat (${prev.at}). A session happened here without activation firing — the hook is not registered, not trusted, or not running on that machine.`; }
   else if (inherited === 'DEGRADED_PREVIOUS') detail = `${HB.stranded.length} earlier activation(s) started and never finished (oldest ${HB.stranded[HB.stranded.length - 1].at}, session ${HB.stranded[HB.stranded.length - 1].session}; ${clearHint(HB.stranded[HB.stranded.length - 1], VENDOR)}) — those sessions crashed mid-run. Concurrent sessions still running are not counted. Run the doctor.`;
-  else if (inherited === 'UNVERIFIED') detail = 'First activation on this machine (no previous heartbeat). Fresh clone or first install — this is expected once. Run the doctor to confirm.';
+  else if (inherited === 'UNVERIFIED') detail = 'First activation in this clone (no previous heartbeat). Fresh clone or first install — this is expected once. Run the doctor to confirm.';
 
   const docsPath = (cfg.docsPath || 'docs/').replace(/\/?$/, '/');
   const status = join(root, docsPath, 'project-os-status.md');

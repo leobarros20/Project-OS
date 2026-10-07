@@ -15,6 +15,7 @@
 import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { writeHeartbeat } from '../activation/heartbeat.mjs';
 import { join, dirname } from 'node:path';
 
 const ROOT = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
@@ -58,7 +59,8 @@ const CASES = [
     what: 'the last real heartbeat says BROKEN_ACTIVATION (a commit landed with no session firing)',
     break: (d) => {
       mkdirSync(join(d, '.project-os'), { recursive: true });
-      writeJSON(join(d, '.project-os/heartbeat.json'), { phase: 'done', at: '2020-01-01T00:00:00.000Z', vendor: 'claude', state: 'BROKEN_ACTIVATION' });
+      // the newest finished record, where the trail actually lives (the helper decides where)
+      writeHeartbeat(d, 'sabotage', { phase: 'done', at: new Date(Date.now() + 1000).toISOString(), vendor: 'claude', state: 'BROKEN_ACTIVATION' });
     },
   },
   {

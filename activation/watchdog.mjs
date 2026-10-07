@@ -46,7 +46,16 @@ for (const f of ['shim.sh', 'activate.mjs']) if (!existsSync(join(shimPath, f)))
 if (existsSync(join(shimPath, 'activate.mjs')) && !/PROJECT-OS v\$\{VERSION\} ACTIVE/.test(readFileSync(join(shimPath, 'activate.mjs'), 'utf8'))) red.push('install: activator no longer emits the sentinel');
 
 // 2. freshness
-if (cfg.verify) { try { execSync(cfg.verify, { cwd: root, encoding: 'utf8', stdio: 'pipe' }); } catch { red.push(`freshness: "${cfg.verify}" is red`); } }
+// A red verify carries the command's own last words. "Is red" alone sent an
+// adopter's teams hunting through node_modules and a half-finished npm install
+// for a cause the command had already printed.
+if (cfg.verify) {
+  try { execSync(cfg.verify, { cwd: root, encoding: 'utf8', stdio: 'pipe' }); }
+  catch (e) {
+    const why = `${e.stdout || ''}\n${e.stderr || ''}`.split('\n').map((l) => l.trim()).filter(Boolean).slice(-3).join(' · ').slice(0, 300);
+    red.push(`freshness: "${cfg.verify}" is red${why ? ' — ' + why : ' (no output)'}`);
+  }
+}
 
 // 3. activation trail (commit-relative, never wall-clock)
 const head = sh('git rev-parse --short HEAD');
@@ -65,7 +74,7 @@ if (stranded.length) {
 }
 if (hb && hb.state === 'BROKEN_ACTIVATION') red.push(`trail: last finished activation reported BROKEN_ACTIVATION`);
 if (hb && hb.at && headTime > Date.parse(hb.at) + 60 * 60e3) red.push(`trail: HEAD (${new Date(headTime).toISOString()}) is newer than the last finished activation (${hb.at}) — a session committed here without activation firing`);
-if (!hb && !running.length && !stranded.length) red.push('trail: no activation has ever finished on this machine');
+if (!hb && !running.length && !stranded.length) red.push('trail: no activation has ever finished in this clone — run it once: node .project-os/activate.mjs <tool> </dev/null (a fresh clone starts empty; worktrees of this clone share the trail)');
 
 const ledgerPath = join(root, '.project-os/activation-ledger.md');
 if (existsSync(ledgerPath)) {

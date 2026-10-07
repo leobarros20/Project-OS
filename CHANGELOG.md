@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.7
+**Current version:** 0.7.8
 
 This file does two jobs:
 
@@ -21,6 +21,29 @@ This file does two jobs:
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
 
 ---
+
+## 0.7.8 — 2026-10-07
+
+### What changed
+
+From an adopter's QA log: five causes of a red pre-push guard, met one after another by four teams. Four were the OS's to fix.
+
+- **The trail lives in the clone's git dir, not in the working tree.** Heartbeats and double-fire markers now live under `<git common dir>/project-os/` (`.git/project-os/` in a plain checkout). Three consequences, each with a test: a **new worktree shares the clone's trail**, so its first push is no longer "no activation has ever finished"; **`git clean -fdx` and `git stash -a` cannot take the trail with them**; and every worktree of one clone sees one trail, which is what "machine-local" meant all along. An umbrella folder is not a repo, so its trail stays under its own `.project-os/`. Records written by 0.7.4–0.7.7 into `.project-os/heartbeat/` are still read, as a fallback, until the new location has entries. Nothing to move or delete.
+- **A red verify carries the command's own last words.** `freshness: "<cmd>" is red` now ends with the last three non-empty lines the command printed, so a verify that failed for want of `node_modules`, or behind a half-finished `npm install` that left `tsc` unknown, says so in the ledger row instead of sending a team hunting. The test assembles the failure text at runtime, so it cannot pass by matching the command's own text — the first version of that test did exactly that, and the pre-fix run caught it.
+- **"No activation has ever finished" names the command**, and says that a fresh clone starts empty and that worktrees share the trail.
+- **The doctor reads the real trail.** Since 0.7.4 it had been reading the pre-0.7.4 single `heartbeat.json`, reporting a weeks-old record as "last real heartbeat" while the per-session directory held the truth. Found by reading, not reported. It now uses the shared helper; a stranded record is a FAIL that names the file and the command; the sabotage case that proves the doctor can see `BROKEN_ACTIVATION` writes where the trail actually lives.
+
+The fifth cause — a package install that dies mid-way and leaves an empty `node_modules/.bin` — is the adopter's. The second fix is what makes it visible.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.8 versions (version line only; no text changed).
+2. **Re-vendor every adopting repo and every umbrella with `project-os init`.** Re-running is safe.
+3. Nothing to move or delete: the old trail is read until the new one has entries, and the first activation after the upgrade writes the new location. A repo red today with "no activation has ever finished" in a worktree is green as soon as any session on that clone finishes an activation.
+4. `JOURNAL.md` entry for the upgrade.
+
+---
+
 
 ## 0.7.7 — 2026-10-07
 

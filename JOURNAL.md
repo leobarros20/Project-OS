@@ -1,5 +1,24 @@
 # Journal — Project-OS
 
+## 2026-10-07 (night) · Project OS Team lead (Claude)
+
+### Done
+- **0.7.8: the trail is per clone, and a red says why.** The adopter lead sent the five causes from their QA log in one line each (the file is on their remote; I did not fetch a product repo, their summary was enough to reproduce). Four were ours: the trail lived in the working tree (new worktrees red on first push; `git clean` took it); "freshness is red" with no reason; "no activation has ever finished" with no command; and the doctor reading the pre-0.7.4 single file since 0.7.4 — that last one found by reading the doctor while fixing the others, not reported by anyone. Four new cases, three of which fail on 0.7.7.
+- Fourth release today. Each one shipped with its pre-fix run recorded; none shipped on "it is only timing".
+
+### Three tests of mine that could not do their job, all caught in the pass
+- A helper built the old path with a comma and my rewrite missed it: every planted record went to a directory nothing read (ENOENT). A test that cannot pass.
+- The planted-import case anchored on an import line I had just changed, so it planted nothing and reported the installer broken. A test that cannot pass.
+- The verify-tail case looked for a phrase that was in the command text itself, so it passed against the old watchdog that printed only the command. A test that cannot fail. Fixed by assembling the phrase at runtime.
+- The lesson is not "be more careful". It is that the pre-fix run is the only thing that catches a test that cannot fail, and the hand reproduction the only thing that catches one that cannot pass. Both are habit now, and today they paid for themselves three times.
+
+### Not done
+- The adopter's fifth cause (a package install dying mid-way) is theirs; the OS now shows it instead of hiding it.
+- The old trail location is still gitignored by `init`, on purpose: sessions on an un-upgraded copy still write there.
+
+### Decisiones pendientes de Leo
+- Sin cambios respecto de las entradas anteriores de hoy.
+
 ## 2026-10-07 (evening) · Project OS Team lead (Claude)
 
 ### Done

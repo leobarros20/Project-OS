@@ -32,7 +32,7 @@ const clone = () => {
   const d = mkdtempSync(join(tmpdir(), 'po-act-'));
   cpSync(ROOT, d, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
   execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m scratch`, { cwd: d, stdio: 'pipe' });
-  rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true });
+  rmSync(join(d, '.git/project-os/heartbeat'), { recursive: true, force: true }); rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true });
   rmSync(join(d, '.project-os/heartbeat.json'), { force: true });
   return d;
 };
@@ -45,13 +45,13 @@ const shim = (d, vendor, env = {}, session = `s-${++sessionSeq}`) => {
 // single shared file raced under nine concurrent activations in production.
 const hbAll = (d) => {
   const out = [];
-  try { for (const f of readdirSync(join(d, '.project-os/heartbeat'))) out.push(JSON.parse(readFileSync(join(d, '.project-os/heartbeat', f), 'utf8'))); } catch { /* none */ }
+  try { for (const f of readdirSync(join(d, '.git/project-os/heartbeat'))) out.push(JSON.parse(readFileSync(join(d, '.git/project-os/heartbeat', f), 'utf8'))); } catch { /* none */ }
   try { out.push(JSON.parse(readFileSync(join(d, '.project-os/heartbeat.json'), 'utf8'))); } catch { /* none */ }
   return out.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0));
 };
 const hb = (d) => hbAll(d).find((r) => r.phase === 'done') || null;
-const writeHb = (d, name, rec) => { mkdirSync(join(d, '.project-os/heartbeat'), { recursive: true }); writeFileSync(join(d, '.project-os/heartbeat', name + '.json'), JSON.stringify(rec)); };
-const clearHb = (d) => { rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true }); rmSync(join(d, '.project-os/heartbeat.json'), { force: true }); };
+const writeHb = (d, name, rec) => { mkdirSync(join(d, '.git/project-os/heartbeat'), { recursive: true }); writeFileSync(join(d, '.git/project-os/heartbeat', name + '.json'), JSON.stringify(rec)); };
+const clearHb = (d) => { rmSync(join(d, '.git/project-os/heartbeat'), { recursive: true, force: true }); rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true }); rmSync(join(d, '.project-os/heartbeat.json'), { force: true }); };
 const parse = (out) => { const j = JSON.parse(out.trim()); const ctx = j.hookSpecificOutput.additionalContext; const m = ctx.split('\n')[0].match(SENTINEL); return { j, ctx, vendor: m && m[1], state: m && m[2], sentinelOk: !!m }; };
 
 const results = [];
@@ -158,7 +158,7 @@ t('umbrella with two members -> exactly one payload naming both', () => {
       const d = join(u, name);
       cpSync(ROOT, d, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
       execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m scratch`, { cwd: d, stdio: 'pipe' });
-      rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true });
+      rmSync(join(d, '.git/project-os/heartbeat'), { recursive: true, force: true }); rmSync(join(d, '.project-os/heartbeat'), { recursive: true, force: true });
       rmSync(join(d, '.project-os/heartbeat.json'), { force: true });
       for (const f of ['activate.mjs', 'heartbeat.mjs']) cpSync(join(ROOT, 'activation', f), join(d, '.project-os', f));
     }
@@ -174,7 +174,7 @@ t('umbrella with two members -> exactly one payload naming both', () => {
     if (!/alpha/.test(ctx) || !/beta/.test(ctx)) return 'payload does not name both members';
     if (ctx.length > 10000) return `payload ${ctx.length} chars over the cap`;
     for (const n of ['alpha', 'beta']) {
-      if (!existsSync(join(u, n, '.project-os/heartbeat'))) return `${n} has no heartbeat: its own activation did not run`;
+      if (!existsSync(join(u, n, '.git/project-os/heartbeat'))) return `${n} has no heartbeat: its own activation did not run`;
     }
     return true;
   } finally { rmSync(u, { recursive: true, force: true }); }
@@ -227,7 +227,7 @@ t('nine concurrent activations leave no stranded record, and the watchdog stays 
     ).join(' ') + ' wait';
     const r = spawnSync('sh', ['-c', burst], { cwd: d, encoding: 'utf8' });
     if (r.status !== 0) return `the burst itself failed: ${String(r.stderr).slice(0, 160)}`;
-    const hbDir = join(d, '.project-os/heartbeat');
+    const hbDir = join(d, '.git/project-os/heartbeat');
     if (!existsSync(hbDir)) return 'no per-session heartbeat directory was written';
     const files = readdirSync(hbDir);
     if (files.length < 9) return `expected 9 per-session records, found ${files.length}: a shared file is still being raced`;
@@ -246,9 +246,9 @@ t('nine concurrent activations leave no stranded record, and the watchdog stays 
 t('a fresh "started" record is running, not stranded', () => {
   const d = clone();
   try {
-    mkdirSync(join(d, '.project-os/heartbeat'), { recursive: true });
-    writeFileSync(join(d, '.project-os/heartbeat/live.json'), JSON.stringify({ phase: 'started', at: new Date().toISOString(), vendor: 'claude' }));
-    writeFileSync(join(d, '.project-os/heartbeat/old.json'), JSON.stringify({ phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' }));
+    mkdirSync(join(d, '.git/project-os/heartbeat'), { recursive: true });
+    writeFileSync(join(d, '.git/project-os/heartbeat/live.json'), JSON.stringify({ phase: 'started', at: new Date().toISOString(), vendor: 'claude' }));
+    writeFileSync(join(d, '.git/project-os/heartbeat/old.json'), JSON.stringify({ phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' }));
     const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
     return w.status === 0 || `a running session was reported as a failure: ${w.stdout.trim().slice(0, 200)}`;
   } finally { rmSync(d, { recursive: true, force: true }); }
@@ -258,9 +258,9 @@ t('a fresh "started" record is running, not stranded', () => {
 t('an old "started" with no "done" is still a finding', () => {
   const d = clone();
   try {
-    mkdirSync(join(d, '.project-os/heartbeat'), { recursive: true });
-    writeFileSync(join(d, '.project-os/heartbeat/crashed.json'), JSON.stringify({ phase: 'started', at: '2020-01-01T00:00:00.000Z', vendor: 'claude' }));
-    writeFileSync(join(d, '.project-os/heartbeat/ok.json'), JSON.stringify({ phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' }));
+    mkdirSync(join(d, '.git/project-os/heartbeat'), { recursive: true });
+    writeFileSync(join(d, '.git/project-os/heartbeat/crashed.json'), JSON.stringify({ phase: 'started', at: '2020-01-01T00:00:00.000Z', vendor: 'claude' }));
+    writeFileSync(join(d, '.git/project-os/heartbeat/ok.json'), JSON.stringify({ phase: 'done', at: new Date().toISOString(), vendor: 'claude', state: 'HEALTHY' }));
     const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
     return (w.status === 1 && /started and never finished/.test(w.stdout)) || `a crashed session was not reported: exit ${w.status} ${w.stdout.trim().slice(0, 160)}`;
   } finally { rmSync(d, { recursive: true, force: true }); }
@@ -354,7 +354,7 @@ t('init copies a NEWLY added import without being edited (umbrella and repo path
     cpSync(ROOT, src, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
     writeFileSync(join(src, 'activation/newmodule.mjs'), 'export const NEW = 1;\n');
     const act = join(src, 'activation/activate.mjs');
-    writeFileSync(act, readFileSync(act, 'utf8').replace("import { join } from 'node:path';", "import { join } from 'node:path';\nimport { NEW as _NEW } from './newmodule.mjs';"));
+    writeFileSync(act, readFileSync(act, 'utf8').replace("from './heartbeat.mjs';", "from './heartbeat.mjs';\nimport { NEW as _NEW } from './newmodule.mjs';"));
     // umbrella path: one member installed, session opens on the folder
     const member = join(umb, 'app');
     mkdirSync(join(member, '.project-os'), { recursive: true });
@@ -450,7 +450,7 @@ t('init creates the workbench index and six kind folders, named per notesFolders
 const oldIso = '2020-01-01T00:00:00.000Z';
 const plantDeadRun = (d, sid) => {
   writeHb(d, sid, { phase: 'started', at: oldIso, vendor: 'claude' });
-  const marker = join(d, '.project-os/.activated-' + sid);
+  const marker = join(d, '.git/project-os/activated-' + sid);
   writeFileSync(marker, oldIso);
   utimesSync(marker, new Date(oldIso), new Date(oldIso));
 };
@@ -463,7 +463,7 @@ t('a run killed mid-way does not silence its session: an old marker with no done
     const out = fire(d, 'cut-1');
     if (!out.trim()) return 'the relaunch exited in silence: the dead run\'s marker was honoured forever';
     // the record is the session's own file; the test helper's hbAll keeps no session field
-    const rec = (() => { try { return JSON.parse(readFileSync(join(d, '.project-os/heartbeat/cut-1.json'), 'utf8')); } catch { return null; } })();
+    const rec = (() => { try { return JSON.parse(readFileSync(join(d, '.git/project-os/heartbeat/cut-1.json'), 'utf8')); } catch { return null; } })();
     if (!rec || rec.phase !== 'done') return `the relaunch emitted but did not write the done that clears the stranded record (file says ${rec ? rec.phase : 'nothing'})`;
     const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
     return w.status === 0 || `the watchdog is still red after the relaunch finished: ${w.stdout.trim().slice(0, 200)}`;
@@ -488,6 +488,62 @@ t('a stranded record is named by file, with the command that clears it, by the w
     if (!/session_id/.test(w.stdout)) return `watchdog does not give the command: ${w.stdout.trim().slice(0, 200)}`;
     const p = parse(shim(d, 'claude').out);
     return /heartbeat\/cut-3\.json/.test(p.ctx) || `activation does not name the file: ${p.ctx.slice(0, 200)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// ---------------------------------------------------------------------------
+// 0.7.8: the trail is per clone, not per checkout, and a red says why.
+// From an adopter's QA log: a new worktree was red with "no activation has ever
+// finished"; git clean took the trail with it; "freshness is red" said nothing
+// about a verify that failed for want of node_modules.
+// ---------------------------------------------------------------------------
+
+const watchdogIn = (cwd) => spawnSync(process.execPath, [join(cwd, 'activation/watchdog.mjs'), '--source', 'test'], { cwd, encoding: 'utf8', input: '' });
+
+t('a new worktree shares the clone\'s trail: it is not "no activation has ever finished"', () => {
+  const d = clone();
+  const wt = d + '-wt';
+  try {
+    shim(d, 'claude'); shim(d, 'claude'); // two runs: the second settles UNVERIFIED into a finished record
+    execSync(`${GIT} worktree add -q "${wt}" -b feature`, { cwd: d, stdio: 'pipe' });
+    const w = watchdogIn(wt);
+    if (/has ever finished/.test(w.stdout)) return `the worktree does not see the clone's trail: ${w.stdout.trim().slice(0, 200)}`;
+    return w.status === 0 || `red for another reason: ${w.stdout.trim().slice(0, 200)}`;
+  } finally { rmSync(wt, { recursive: true, force: true }); rmSync(d, { recursive: true, force: true }); }
+});
+
+t('git clean -fdx does not take the trail with it', () => {
+  const d = clone();
+  try {
+    shim(d, 'claude'); shim(d, 'claude');
+    execSync(`${GIT} clean -fdxq`, { cwd: d, stdio: 'pipe' });
+    const w = watchdogIn(d);
+    if (/has ever finished/.test(w.stdout)) return 'git clean erased the trail: it still lives in the working tree';
+    return w.status === 0 || `red for another reason: ${w.stdout.trim().slice(0, 200)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('a red verify carries the command\'s own last words, not just "is red"', () => {
+  const d = clone();
+  try {
+    shim(d, 'claude'); shim(d, 'claude');
+    const cfgPath = join(d, '.project-os/config.json');
+    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+    // the phrase is assembled at runtime so it cannot be matched in the command text itself
+    cfg.verify = `"${process.execPath}" -e "console.error(['tsc','is','not','recognized','as','an','internal','or','external','command'].join(' ')); process.exit(1)"`;
+    writeFileSync(cfgPath, JSON.stringify(cfg));
+    const w = watchdogIn(d);
+    if (w.status !== 1) return `expected red, got exit ${w.status}`;
+    return /tsc is not recognized/.test(w.stdout) || `red without the reason: ${w.stdout.trim().slice(0, 200)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('a clone that has never finished an activation says so, and says what to run', () => {
+  const d = clone();
+  try {
+    const w = watchdogIn(d);
+    if (w.status !== 1 || !/has ever finished/.test(w.stdout)) return `expected the never-finished red, got exit ${w.status}: ${w.stdout.trim().slice(0, 160)}`;
+    return /activate\.mjs/.test(w.stdout) || `red without the command that fixes it: ${w.stdout.trim().slice(0, 200)}`;
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
