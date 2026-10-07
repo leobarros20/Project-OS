@@ -158,10 +158,31 @@ else {
 // Created on day one: a repo without it puts that material in docs/, where the
 // protocol correctly polices it into red, or in a chat window, where it is lost.
 {
-  const notes = ((readJSON(cfgPath) || {}).notesPath || 'notes/').replace(/\/?$/, '/');
+  const cfg = readJSON(cfgPath) || {};
+  const notes = (cfg.notesPath || 'notes/').replace(/\/?$/, '/');
+  // Six kinds, the same in every project so that habit does the finding. The
+  // NAMES follow the project's language (notesFolders); the kinds never change.
+  const KINDS = {
+    research: 'competitors, user signals, market notes, anything learned about the problem',
+    meetings: 'notes from conversations, and the decisions still pending someone',
+    marketing: 'copy, content, campaign drafts',
+    design: 'explorations, references, notes on screens and motion',
+    references: 'external material: articles, links, papers',
+    drafts: 'half-formed ideas that have no shape yet',
+  };
+  const names = Object.fromEntries(Object.keys(KINDS).map((k) => [k, String((cfg.notesFolders || {})[k] || k).replace(/\/+$/, '')]));
+  let index = readFileSync(join(SRC, 'activation/templates/notes-README.md'), 'utf8');
+  for (const k of Object.keys(KINDS)) index = index.split('`' + k + '/`').join('`' + names[k] + '/`');
   const readme = join(root, notes, 'README.md');
   if (existsSync(readme)) say(`  = ${notes}README.md exists, not touched`);
-  else { did(`create ${notes} with its README (the workbench — nothing under it is a source of truth)`); wr(notes + 'README.md', readFileSync(join(SRC, 'activation/templates/notes-README.md'), 'utf8')); }
+  else { did(`create ${notes} with its index README (the workbench — nothing under it is a source of truth)`); wr(notes + 'README.md', index); }
+  const missing = Object.keys(KINDS).filter((k) => !existsSync(join(root, notes, names[k])));
+  if (!missing.length) say(`  = ${notes}kind folders present`);
+  else {
+    did(`create ${missing.length} kind folder(s) in ${notes}: ${missing.map((k) => names[k] + '/').join(', ')}`);
+    // one-line README per folder: git keeps no empty directory, so a bare folder would vanish on clone
+    for (const k of missing) wr(`${notes}${names[k]}/README.md`, `# ${names[k]}\n\n${KINDS[k][0].toUpperCase() + KINDS[k].slice(1)}. Nothing here is a source of truth; see ../README.md.\n`);
+  }
 }
 
 // ------------------------------------------------- 3. vendor session hooks

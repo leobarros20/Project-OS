@@ -107,7 +107,7 @@ node <project-os>/scripts/init.mjs             # apply; ends with one OBSERVED i
 It copies the runtime into `.project-os/`, writes `config.json` defaults (never
 overwrites one), merges the SessionStart entry into each vendor config it finds
 (`--vendors claude,codex,gemini` to force; foreign hooks are kept), writes the
-static block into `AGENTS.md` and any `CLAUDE.md`/`GEMINI.md`, adds the
+static block into `AGENTS.md` and any `CLAUDE.md`/`GEMINI.md`, creates the workbench with its index README and six kind folders (names per `notesFolders`), adds the
 gitignore lines, installs the pre-push watchdog, then fires activation from the
 root and from a subdirectory. **It refuses what it cannot own** (a foreign
 pre-push, a `core.hooksPath` it did not set, a vendor file that is not JSON)

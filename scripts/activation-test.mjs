@@ -416,6 +416,25 @@ t('a stale legacy "started" with NO per-session record stays red, and says how t
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
+// 22. The workbench has a shape (3.22): an index README and six kind folders,
+// named in the project's language, each with a file so git keeps the folder.
+t('init creates the workbench index and six kind folders, named per notesFolders', () => {
+  const d = scratchRepo();
+  try {
+    mkdirSync(join(d, '.project-os'), { recursive: true });
+    writeFileSync(join(d, '.project-os/config.json'), JSON.stringify({ tier: 'solo', verify: 'exit 0', notesPath: 'notas/', notesFolders: { research: 'investigacion', design: 'diseno' } }));
+    initIn(d, ['--allow-refusals']);
+    const idx = join(d, 'notas/README.md');
+    if (!existsSync(idx)) return 'no index README in the renamed workbench';
+    const txt = readFileSync(idx, 'utf8');
+    if (!/`investigacion\/`/.test(txt) || /`research\/`/.test(txt)) return 'the index does not use the configured folder names';
+    for (const f of ['investigacion', 'meetings', 'marketing', 'diseno', 'references', 'drafts']) if (!existsSync(join(d, 'notas', f, 'README.md'))) return `kind folder missing or empty (would vanish on clone): notas/${f}/`;
+    if (existsSync(join(d, 'notas/research'))) return 'the default name was created next to the configured one';
+    const again = initIn(d, ['--allow-refusals']);
+    return /kind folders present/.test(again.stdout) || 'a second run did not recognise the folders it had created';
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
 // 7. Red freshness
 // 7. Red freshness
 // 7. Red freshness -> DOCS_STALE, and the owed list is in the payload.

@@ -1,5 +1,20 @@
 # Journal — Project-OS
 
+## 2026-10-07 (later) · Project OS Team lead (Claude)
+
+### Decision: the workbench gets a shape (0.7.6)
+- Routed from an adopter's playbook the same day. Taken, generalized: the README as index; six kinds as sub-folders with names in the project's language (`notesFolders`, the `notesPath` pattern); frontmatter `date` · `topic` · `status` · `source`; wikilinks between notes; non-technical material has no other home; arrival (flat, 0.7.1) and filing (by a person, later) are two steps, so the two rules do not conflict.
+- Not taken: the adopter's notes tool and how it reaches the repo, a tool-specific URL field, and its re-filing deadline. Those are theirs.
+- Kept as is, on purpose: the class exclusion from freshness, index included. The adopter checks its index; the spec does not, because an exception to an exception is how a rule stops being explainable. Said in the spec.
+- Why a release and not a parked note: `init` now creates folders, which is installer behaviour, and installer behaviour ships with a test (one, plus the existing self-test).
+- This repo's own workbench got the six folders too.
+
+### Found while gating, not fixed, worth a line
+- **A saturated machine can turn a correct install into silence.** With 59 node processes from other sessions on this machine, activation took 8 to 17 s (freshness alone 2 s, the rest is process start under load); the vendor hook timeout in the templates is 15 s. A vendor that kills the hook at its timeout delivers no payload, which is the one outcome the module forbids — and the module only notices it *afterwards* (the next run reports the crashed predecessor; the watchdog sees a stranded start after an hour). The three vendor-contract cases of the test suite went over their 8 s budget for the same reason; the published v0.7.5 code, run as a control under the same load, failed them identically, so the release was held until the subset passed on a quieter machine rather than shipped on "it is only timing". Candidate for later: the activation payload could carry its own elapsed time, so a slow-but-alive activation is visible before it becomes a dead one.
+
+### Decisiones pendientes de Leo
+- Sin cambios respecto de la entrada anterior de hoy.
+
 ## 2026-10-07 · Project OS Team lead (Claude)
 
 ### Done

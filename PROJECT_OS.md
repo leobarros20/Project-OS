@@ -1,6 +1,6 @@
 # PROJECT_OS.md
 
-**Status:** Working draft · 0.7.5
+**Status:** Working draft · 0.7.6
 **Purpose:** A project operating system. A portable artifact contract for organizing any project — software, game, tool, web product, startup operation — so that humans and AI agents can build, understand, and maintain it together. Drop this file (and its two companion files) at the root of any project.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.), human builders, designers, and product people.
@@ -1185,7 +1185,7 @@ Reference point: newest substantive commit, **YYYY-MM-DD**.
 
 1. **Not a source of truth.** An agent may read it for context, must **never cite it as fact**, and must never update `docs/`, a manifest, or a decision record from it without confirming with the owner. The failure mode is an agent reading a draft and treating it as a decision, so this is stated in the spec *and* again in the directory's own README, where an agent that skipped the spec will still meet it.
 2. **Exempt from freshness by construction.** No file under it is CALENDAR or DEBT; its age is never a finding; the check excludes the directory as a class rather than by a manifest row per note (see the freshness rule in Part 2).
-3. **Every note carries a date, and nobody is ever obliged to update one.** The date says when it was true for its author. Staleness is expected, not a defect.
+3. **Every note carries a date, and nobody is ever obliged to update one.** The date says when it was true for its author. Staleness is expected, not a defect. The date is the first line of the note's frontmatter (see *Shape*, below).
 4. **Promotion is the exit.** A note that matures becomes a decision record, a `docs/` artifact, or a tracker issue. The note stays where it is with one line saying where it went, so the trail survives.
 5. **Not a dumping ground.** A decision belongs in decisions; a session record belongs in the journal; a specification belongs in `docs/`. This directory holds what has no other home *yet*.
 6. **Weight.** Binaries are allowed, and a few megabytes is the point where the material belongs outside the repo instead. Observed in practice: one project's imported brand assets reached 11 MB and another's art 8 MB, which is past that line.
@@ -1197,22 +1197,67 @@ Reference point: newest substantive commit, **YYYY-MM-DD**.
 
 The reason is the point of the whole directory: once imported, that material is just notes. A folder named after the exporter tells every future reader that this is somebody else's stuff living here on sufferance, which is exactly the opposite of a handover. Six months later nobody should have to know where a note came from to use it — and if they do care, the frontmatter says.
 
+**Shape — written to be read in a notes tool, not in the repo.** A workbench is read in whatever reads a folder of markdown (an outliner, a folder-based notes app, a wiki), by people who are not reading the code. So it has the same shape in every project, so that habit does the finding:
+
+- **The README is the index.** What each folder holds, and the handful of notes worth opening first. Kept by habit when a cycle closes; nothing checks it, by clause 2.
+- **Six kinds, as sub-folders:** `research/`, `meetings/`, `marketing/`, `design/`, `references/`, `drafts/`. The *names* follow the project's language (`notesFolders` in `.project-os/config.json`, for the same reason as `notesPath`); the *kinds* do not change. A note that fits none stays at the root. Media sits next to its note, never loose. `init` creates them, with a one-line README each, because git keeps no empty directory.
+- **Every note opens with frontmatter:** `date`, `topic`, `status` (`exploring` · `ready-to-promote` · `promoted → <where>` · `archived`), and `source` when it was imported. `promoted → <where>` is the one line clause 4 asks for. Links between notes may be wikilinks, which is what a notes tool resolves; a link into `docs/` is a plain relative path, because `docs/` is read in the repo.
+- **Non-technical material has no other home.** A brief, an interview, a competitor table, a campaign plan: into the kind that fits, never into `docs/` (the map, freshness-checked) and never into a loose folder at the repo root.
+- **Arrival and filing are two steps.** An import lands flat (above); filing it into a kind is a later step, by a person who has read it. The two rules do not conflict: one is about how material arrives, the other about where it lives once somebody knows what it is.
+
 ~~~markdown
 # Notes
 
 The workbench. `docs/` is the map and must be true; this is where thinking is
-allowed to be wrong.
+allowed to be wrong: explorations, references, links, drafts, notes from a
+conversation, material imported from somewhere else. It is written to be read
+in a notes tool, not in the repo.
 
 **Nothing here is a source of truth.** Read it for context. Never cite it as
 fact. Never update `docs/`, a manifest or a decision record from it without
-confirming with the owner first.
+confirming with the owner first — a draft is not a decision, and an agent
+quietly promoting one into the map is the failure this line exists to stop.
 
-Every note starts with a date. Nobody has to update one, ever — a stale note is
-working as intended. When a note matures, promote it (a decision record, a
-`docs/` artifact, an issue) and leave one line here saying where it went.
+## What is where
 
-Not a dumping ground: a decision goes in decisions, a session record in the
-journal, a specification in `docs/`. This holds what has no other home yet.
+| Folder | Holds |
+|---|---|
+| `research/` | competitors, user signals, market notes, anything learned about the problem |
+| `meetings/` | notes from conversations, and the decisions still pending someone |
+| `marketing/` | copy, content, campaign drafts |
+| `design/` | explorations, references, notes on screens and motion |
+| `references/` | external material: articles, links, papers |
+| `drafts/` | half-formed ideas that have no shape yet |
+
+A note that fits none stays here at the root. Media sits next to its note,
+never loose.
+
+## Start here
+
+<!-- the handful of notes worth opening first; kept by habit when a cycle closes -->
+
+## Every note opens with
+
+```yaml
+---
+date: YYYY-MM-DD
+topic: one line
+status: exploring        # exploring | ready-to-promote | promoted → <where> | archived
+source:                  # url or id, only when the note was imported
+---
+```
+
+The date says when it was true for whoever wrote it. Nobody has to update a
+note, ever: a stale note is working as intended, and the freshness check
+excludes this whole directory as a class. When a note matures, promote it (a
+decision record, a `docs/` artifact, an issue) and set `status: promoted → …`
+so the trail survives. Links between notes may be wikilinks; a link into
+`docs/` is a plain relative path.
+
+Material imported from another tool lands here flat, never in a folder named
+after the tool; its origin lives in `source`. Filing it into a folder above is
+a later step, by a person who has read it. Past a few megabytes, material
+belongs outside the repo.
 ~~~
 
 ---

@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.5
+**Current version:** 0.7.6
 
 This file does two jobs:
 
@@ -21,6 +21,29 @@ This file does two jobs:
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
 
 ---
+
+## 0.7.6 — 2026-10-07
+
+### What changed
+
+**The workbench has a shape (`PROJECT_OS.md` 3.22, *Shape*).** 0.7 gave every project one directory where writing may be wrong; it said nothing about what that directory looks like to the person who reads it, and that person reads it in a notes tool, not in the repo. Now, the same in every project so that habit does the finding: the README is the **index** (what each folder holds, the handful of notes worth opening first; kept by habit, never checked); **six kinds as sub-folders** — `research/`, `meetings/`, `marketing/`, `design/`, `references/`, `drafts/` — whose *names* follow the project's language (`notesFolders` in `.project-os/config.json`, same reason as `notesPath`) while the *kinds* never change; **every note opens with frontmatter** (`date`, `topic`, `status`, and `source` when imported), where `status: promoted → <where>` is the one line clause 4 already asked for; wikilinks between notes are fine, links into `docs/` are plain paths; **non-technical material has no other home** than the kind that fits; and **arrival and filing are two steps** — an import still lands flat (0.7.1), and filing it into a kind is a later step by a person who has read it.
+
+`init` creates the index and the six folders, each with a one-line README because git keeps no empty directory, and substitutes the configured names into the index. An existing README is never touched. Tested: a renamed workbench with two renamed kinds gets exactly those names, nothing under the defaults, and a second run recognises what the first created.
+
+**Freshness is unchanged.** The workbench stays excluded as a class, index included. Making the index the one checked file in there would be an exception to an exception; it is kept by habit instead, and the spec says so.
+
+Routed from an adopter's playbook, where it was applied first. What was *not* taken, because it is that adopter's and not the protocol's: which notes tool, how the tool reaches the repo, a tool-specific URL field (`source` covers it), and a deadline to re-file existing notes.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.6 versions.
+2. Re-run `project-os init`: it creates the missing kind folders. An existing README is not touched; to adopt the index, merge the template's *What is where* and *Every note opens with* sections into it by hand, or delete it and re-run.
+3. If the folder names should follow another language, set `notesFolders` in `.project-os/config.json` **before** step 2.
+4. Notes already at the workbench root: file them into kinds when somebody has read them. Nothing is red while they stay where they are.
+5. `JOURNAL.md` entry for the upgrade.
+
+---
+
 
 ## 0.7.5 — 2026-10-07
 

@@ -61,6 +61,15 @@
       "type": "string",
       "description": "The workbench (PROJECT_OS.md 3.22): the one directory where writing is allowed to be wrong. Excluded from freshness as a class — no file under it is ever a finding. Default notes/; set any name, e.g. notas/, so a team is not forced into English."
     },
+    "notesFolders": {
+      "type": "object",
+      "description": "Names for the six kind folders of the workbench (PROJECT_OS.md 3.22, Shape), in the project's language. Keys are the kinds and never change; values are folder names. Missing keys keep the English default.",
+      "properties": {
+        "research": { "type": "string" }, "meetings": { "type": "string" }, "marketing": { "type": "string" },
+        "design": { "type": "string" }, "references": { "type": "string" }, "drafts": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
     "autoInject": {
       "type": "boolean",
       "description": "Whether the SessionStart injector is active. True asserts it is registered AND an injection has been observed — presence is not registration."
