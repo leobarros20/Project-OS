@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.6
+**Current version:** 0.7.7
 
 This file does two jobs:
 
@@ -21,6 +21,26 @@ This file does two jobs:
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
 
 ---
+
+## 0.7.7 — 2026-10-07
+
+### What changed
+
+**A run killed mid-way no longer silences its session forever** (`activation/activate.mjs`). The double-fire marker `.project-os/.activated-<session>` was read as permanent. A run that died before finishing — its vendor's timeout, a harness stopping a background command, a session cut — left the marker and a `started` heartbeat behind. Every later fire for that session exited at the marker in silence, so nothing could ever write the `done` that clears the stranded record; after an hour the watchdog blocked every push with "started and never finished", and the only way out was finding and deleting a gitignored file by hand, which no message named. Reported from an adopter where four teams lost an hour each, on two consecutive days. Now the marker is a **claim, not a lock**: honoured while the run it belongs to can still be running (younger than `DEDUP_MS`, 60 s — a concurrent double fire starts milliseconds apart and a vendor kills a hook at about 15 s), or once that session has a finished record; otherwise the fire is the relaunch. The concurrent double fire the guard exists for still yields exactly one payload (tested); a dead run's session recovers on its next fire (tested; fails on 0.7.6). Nothing else about the trail changed: a stranded record is still cleared only by its own session's `done`, because letting any later activation clear it is how the nine-session race of 0.7.4 would come back.
+
+**Every "started and never finished" now names the file and the command that clears it**, in the watchdog row and in the activation payload (`clearHint` in `activation/heartbeat.mjs`): the session's heartbeat file, and a one-line command that finishes that session with its id on stdin — or, when that session is gone for good, delete the file. The legacy single-file case keeps its own wording.
+
+**`activation-test --only <regex>`** runs a subset of cases by name, so one case can be shown to fail before its fix lands without waiting for the whole suite. Never a release gate.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.7 versions (version line only; no text changed).
+2. **Re-vendor every adopting repo with `project-os init`** so `.project-os/activate.mjs`, `heartbeat.mjs` and `watchdog.mjs` are the 0.7.7 copies. Re-running is safe.
+3. A repo whose watchdog is red today with "started and never finished" needs nothing deleted: after step 2, the next fire for that session finishes it, and the message tells you the file and the command if you want it green sooner.
+4. `JOURNAL.md` entry for the upgrade.
+
+---
+
 
 ## 0.7.6 — 2026-10-07
 

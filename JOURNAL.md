@@ -1,5 +1,22 @@
 # Journal — Project-OS
 
+## 2026-10-07 (evening) · Project OS Team lead (Claude)
+
+### Done
+- **0.7.7: a dead run's marker is a claim, not a lock.** An adopter's team lead reported, with the exact sequence: a run killed mid-way leaves `started` + the double-fire marker; the marker silences every later fire for that session; nothing can ever write the `done`; after an hour the watchdog blocks every push, and no message names the file. Verified at the source (one line: marker present → exit 0 before any heartbeat) before touching anything. Both of the two remedies they offered were taken, because they are complementary: the marker now expires (honoured while the run can still be running, 60 s, or once the session has a `done`), and every "started and never finished" names the file and the command that finishes that session. Three new cases; two fail on 0.7.6 and one is the control (a fresh marker still dedupes).
+- **Their workaround, judged as they asked:** deleting the marker by hand and re-running that session to the end was the right move and the only one 0.7.6 offered; no `--no-verify`, so the ledger stayed honest. Nothing to correct there.
+- `activation-test --only <regex>`: a subset by name, for proving a failure before its fix without the 15-minute suite. Not a gate.
+
+### A test of mine that could not pass
+- My first version of the relaunch case checked the written `done` through the test helper, which keeps no `session` field, so the assertion could never be true no matter what the code did. The manual reproduction said `done`; the test said no. A test that cannot pass is as useless as one that cannot fail, and the way I caught it is the same as always: run the scenario by hand and compare.
+
+### Not done, and why
+- A record stranded by a session that is gone for good still needs its file deleted by a person. The alternative — letting any later `done` clear any stranded record — is exactly how the nine-session race of 0.7.4 would come back. The message now says which file; that was the missing piece.
+- The QA log the report cites (`clipper-hub/docs/qa.md`, four causes) is not at that path on this machine. Asked for it; the other three causes may be more findings.
+
+### Decisiones pendientes de Leo
+- Sin cambios respecto de las entradas anteriores de hoy.
+
 ## 2026-10-07 (later) · Project OS Team lead (Claude)
 
 ### Decision: the workbench gets a shape (0.7.6)

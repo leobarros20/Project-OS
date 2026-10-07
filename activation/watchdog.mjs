@@ -23,7 +23,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { heartbeatState } from './heartbeat.mjs';
+import { heartbeatState, clearHint } from './heartbeat.mjs';
 
 const args = process.argv.slice(2);
 const SOURCE = (args[args.indexOf('--source') + 1] || 'manual').replace(/^--.*/, 'manual');
@@ -59,11 +59,9 @@ const headTime = Date.parse(sh('git log -1 --format=%cI HEAD') || 0);
 const { latest: hb, running, stranded } = heartbeatState(root);
 if (stranded.length) {
   const oldest = stranded[stranded.length - 1];
-  // A stranded LEGACY record is the one red a person cannot reason their way out
-  // of, so the message says what clears it: running activation once writes a
-  // per-session record, which supersedes the legacy file.
-  const how = oldest.legacy ? ' — this is the pre-0.7.4 single heartbeat.json; run activation once (node .project-os/activate.mjs <tool> </dev/null) and it is superseded' : '';
-  red.push(`trail: ${stranded.length} activation(s) started and never finished (oldest ${oldest.at}, session ${oldest.session})${how}`);
+  // Name the file and the command, every time. "Started and never finished" with
+  // no file behind it cost an adopter's teams an hour each, more than once.
+  red.push(`trail: ${stranded.length} activation(s) started and never finished (oldest ${oldest.at}, session ${oldest.session}) — ${clearHint(oldest)}`);
 }
 if (hb && hb.state === 'BROKEN_ACTIVATION') red.push(`trail: last finished activation reported BROKEN_ACTIVATION`);
 if (hb && hb.at && headTime > Date.parse(hb.at) + 60 * 60e3) red.push(`trail: HEAD (${new Date(headTime).toISOString()}) is newer than the last finished activation (${hb.at}) — a session committed here without activation firing`);

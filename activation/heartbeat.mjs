@@ -15,15 +15,30 @@
 // still inside it, and only for the session that owns it.
 //
 // Note for anyone reading the markers instead: `.activated-<session>` is
-// written at START (its 24 bytes are an ISO timestamp) or holds `dedup` for a
-// second fire on the same session. It is not evidence that an activation
-// finished, so it cannot be used to clear a stranded "started".
+// written at START (its 24 bytes are an ISO timestamp). It is not evidence that
+// an activation finished, so it cannot be used to clear a stranded "started".
+// And it is a CLAIM, not a lock: honoured only while the run it belongs to can
+// still be running (DEDUP_MS), or once that session has a finished record. An
+// old marker with no `done` behind it is a dead run — through 0.7.6 it was read
+// as permanent, and a run killed mid-way silenced its session forever.
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 // A session that started longer ago than this is not still running.
 export const STRANDED_MS = 60 * 60e3;
+
+// A double-fire marker younger than this may belong to a run still in flight
+// (the two hooks of a concurrent double fire start milliseconds apart; a hook
+// is killed by its vendor at ~15 s). Older, with no `done` for the session, it
+// is the residue of a dead run and the next fire is a relaunch.
+export const DEDUP_MS = 60e3;
+
+/** The one sentence a person needs when a stranded record is reported: which file holds it, and the command that finishes that session. */
+export function clearHint(rec, vendor = '<tool>') {
+  if (rec.legacy) return 'this is the pre-0.7.4 single heartbeat.json; run activation once (node .project-os/activate.mjs ' + vendor + ' </dev/null) and it is superseded';
+  return `file .project-os/heartbeat/${rec.session}.json — finish that session: printf '{"session_id":"${rec.session}"}' | node .project-os/activate.mjs ${vendor}  (or delete the file if that session is gone for good)`;
+}
 
 const dir = (root) => join(root, '.project-os/heartbeat');
 const safe = (s) => String(s || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || `pid-${process.pid}`;

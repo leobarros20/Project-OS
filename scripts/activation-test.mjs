@@ -10,7 +10,7 @@
 // Exit 0 = every case passed · 1 = something did not behave as a vendor expects.
 
 import { execSync, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, unlinkSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync, unlinkSync, mkdirSync, readdirSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -23,6 +23,9 @@ const BUDGET_MS = 8000; // measured base ~2.5-3 s here; vendors kill at 15 s (15
 // sabotage suite alone runs it 11 times). The rest are release gates.
 const FAST = process.argv.includes('--fast');
 const FAST_CASES = /exactly one parseable payload|not installed/;
+// --only <regex>: a subset by name, for proving one case fails before its fix
+// lands without waiting for the whole suite. Never a release gate.
+const ONLY = (() => { const i = process.argv.indexOf('--only'); return i >= 0 ? new RegExp(process.argv[i + 1]) : null; })();
 let sessionSeq = 0; // every run gets its own session id unless a case asks otherwise
 
 const clone = () => {
@@ -53,7 +56,7 @@ const parse = (out) => { const j = JSON.parse(out.trim()); const ctx = j.hookSpe
 
 const results = [];
 const t = (name, fn) => {
-  if (FAST && !FAST_CASES.test(name)) return; try { const r = fn(); results.push({ name, ok: r === true, detail: r === true ? '' : String(r) }); } catch (e) { results.push({ name, ok: false, detail: `threw: ${e.message}` }); } };
+  if (FAST && !FAST_CASES.test(name)) return; if (ONLY && !ONLY.test(name)) return; try { const r = fn(); results.push({ name, ok: r === true, detail: r === true ? '' : String(r) }); } catch (e) { results.push({ name, ok: false, detail: `threw: ${e.message}` }); } };
 
 // 0. Not installed -> silent, exit 0.
 t('not installed: prints nothing, exits 0', () => {
@@ -118,7 +121,8 @@ t('previous run crashed mid-way: next run says so', () => {
     // "started" is the normal state when several sessions are open at once.
     writeHb(d, 'crashed', { phase: 'started', at: '2020-01-01T00:00:00.000Z', vendor: 'claude' });
     const p = parse(shim(d, 'claude').out);
-    return /never finished|crashed/i.test(p.ctx) || 'stranded started-record was not reported';
+    if (!/never finished|crashed/i.test(p.ctx)) return 'stranded started-record was not reported';
+    return /heartbeat\/crashed\.json/.test(p.ctx) || 'reported, but without naming the file that holds it';
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
@@ -432,6 +436,58 @@ t('init creates the workbench index and six kind folders, named per notesFolders
     if (existsSync(join(d, 'notas/research'))) return 'the default name was created next to the configured one';
     const again = initIn(d, ['--allow-refusals']);
     return /kind folders present/.test(again.stdout) || 'a second run did not recognise the folders it had created';
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// ---------------------------------------------------------------------------
+// 0.7.7: a run killed mid-way must not silence its session forever.
+// Reported from an adopter: a `started` heartbeat plus the double-fire marker,
+// left by a run the harness killed, made every later fire for that session exit
+// in silence; nothing could ever write the `done` that clears the stranded
+// record, and the watchdog blocked pushes until someone deleted the marker.
+// ---------------------------------------------------------------------------
+
+const oldIso = '2020-01-01T00:00:00.000Z';
+const plantDeadRun = (d, sid) => {
+  writeHb(d, sid, { phase: 'started', at: oldIso, vendor: 'claude' });
+  const marker = join(d, '.project-os/.activated-' + sid);
+  writeFileSync(marker, oldIso);
+  utimesSync(marker, new Date(oldIso), new Date(oldIso));
+};
+const fire = (d, sid) => spawnSync('sh', ['activation/shim.sh', 'claude'], { cwd: d, encoding: 'utf8', input: JSON.stringify({ session_id: sid, hook_event_name: 'SessionStart', source: 'startup' }) }).stdout;
+
+t('a run killed mid-way does not silence its session: an old marker with no done is a relaunch, not a double fire', () => {
+  const d = clone();
+  try {
+    plantDeadRun(d, 'cut-1');
+    const out = fire(d, 'cut-1');
+    if (!out.trim()) return 'the relaunch exited in silence: the dead run\'s marker was honoured forever';
+    // the record is the session's own file; the test helper's hbAll keeps no session field
+    const rec = (() => { try { return JSON.parse(readFileSync(join(d, '.project-os/heartbeat/cut-1.json'), 'utf8')); } catch { return null; } })();
+    if (!rec || rec.phase !== 'done') return `the relaunch emitted but did not write the done that clears the stranded record (file says ${rec ? rec.phase : 'nothing'})`;
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    return w.status === 0 || `the watchdog is still red after the relaunch finished: ${w.stdout.trim().slice(0, 200)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('a fresh marker still dedupes (the concurrent double fire the guard exists for)', () => {
+  const d = clone();
+  try {
+    const a = fire(d, 'dup-2'); const b = fire(d, 'dup-2');
+    return (a.trim().length > 0 && b.trim() === '') || `first=${a.trim().length} chars, second=${b.trim().length} chars`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('a stranded record is named by file, with the command that clears it, by the watchdog and by activation', () => {
+  const d = clone();
+  try {
+    plantDeadRun(d, 'cut-3');
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    if (w.status !== 1) return `expected red, got exit ${w.status}`;
+    if (!/heartbeat\/cut-3\.json/.test(w.stdout)) return `watchdog does not name the file: ${w.stdout.trim().slice(0, 200)}`;
+    if (!/session_id/.test(w.stdout)) return `watchdog does not give the command: ${w.stdout.trim().slice(0, 200)}`;
+    const p = parse(shim(d, 'claude').out);
+    return /heartbeat\/cut-3\.json/.test(p.ctx) || `activation does not name the file: ${p.ctx.slice(0, 200)}`;
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 

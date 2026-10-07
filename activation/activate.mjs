@@ -24,11 +24,11 @@
 // A repo nobody touched for a month is HEALTHY and quiet.
 
 import { execSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { writeHeartbeat, heartbeatState, pruneHeartbeats, STRANDED_MS } from './heartbeat.mjs';
+import { writeHeartbeat, heartbeatState, allHeartbeats, pruneHeartbeats, clearHint, STRANDED_MS, DEDUP_MS } from './heartbeat.mjs';
 
-const VERSION = '0.7.6';
+const VERSION = '0.7.7';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.
@@ -79,10 +79,26 @@ if (!existsSync(cfgPath)) {
 
 // Double-fire guard: a plugin hook and an init-copied settings hook can BOTH run
 // on the same session start (Claude runs matching hooks in parallel, no dedupe).
-// One payload per session: the second activation exits quietly and records why.
+// One payload per session: the second activation exits quietly.
+//
+// The marker is a CLAIM that a run for this session is in flight or finished,
+// never a permanent lock. Through 0.7.7 it was permanent: a run killed mid-way
+// (its vendor's timeout, a harness stopping a background command, a session
+// cut) left the marker and a `started` heartbeat behind, every later fire for
+// that session exited here in silence, so nothing could ever write the `done`
+// that clears the stranded record, and the watchdog blocked every push until
+// somebody found and deleted the marker by hand. Reported from an adopter where
+// four teams lost an hour each. Now the marker is honoured only while the run
+// it belongs to can still be running (younger than DEDUP_MS), or once the
+// session has a finished record; otherwise this fire is the relaunch.
 if (SESSION) {
-  const seen = join(root, '.project-os/.activated-' + SESSION.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64));
-  if (existsSync(seen)) { try { writeFileSync(seen, 'dedup'); } catch {} process.exit(0); }
+  const sid = SESSION.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+  const seen = join(root, '.project-os/.activated-' + sid);
+  if (existsSync(seen)) {
+    const startedAt = (() => { try { const t = Date.parse(readFileSync(seen, 'utf8').trim()); return Number.isNaN(t) ? statSync(seen).mtimeMs : t; } catch { return 0; } })();
+    const finished = allHeartbeats(root).some((r) => r.session === sid && r.phase === 'done');
+    if (finished || Date.now() - startedAt < DEDUP_MS) process.exit(0);
+  }
   try { mkdirSync(join(root, '.project-os'), { recursive: true }); writeFileSync(seen, iso); } catch {}
 }
 const sh = (c) => { try { return execSync(c, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(); } catch { return ''; } };
@@ -127,7 +143,7 @@ try {
   else if (meta && meta.docsVerifiedAtCommit && head && meta.docsVerifiedAtCommit !== head) state = 'LATE';
   if (inherited === 'UNVERIFIED' && state === 'HEALTHY') state = 'UNVERIFIED';
   if (inherited === 'BROKEN_ACTIVATION') { state = 'BROKEN_ACTIVATION'; detail = `Last commit is newer than the last heartbeat (${prev.at}). A session happened here without activation firing — the hook is not registered, not trusted, or not running on that machine.`; }
-  else if (inherited === 'DEGRADED_PREVIOUS') detail = `${HB.stranded.length} earlier activation(s) started and never finished (oldest ${HB.stranded[HB.stranded.length - 1].at}, session ${HB.stranded[HB.stranded.length - 1].session}) — those sessions crashed mid-run. Concurrent sessions still running are not counted. Run the doctor.`;
+  else if (inherited === 'DEGRADED_PREVIOUS') detail = `${HB.stranded.length} earlier activation(s) started and never finished (oldest ${HB.stranded[HB.stranded.length - 1].at}, session ${HB.stranded[HB.stranded.length - 1].session}; ${clearHint(HB.stranded[HB.stranded.length - 1], VENDOR)}) — those sessions crashed mid-run. Concurrent sessions still running are not counted. Run the doctor.`;
   else if (inherited === 'UNVERIFIED') detail = 'First activation on this machine (no previous heartbeat). Fresh clone or first install — this is expected once. Run the doctor to confirm.';
 
   const docsPath = (cfg.docsPath || 'docs/').replace(/\/?$/, '/');
