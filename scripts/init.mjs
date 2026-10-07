@@ -72,6 +72,33 @@ const finish = ({ observed }) => {
   process.exit(EXIT.OK);
 };
 
+// ------------------------------------------------ 0. the source must be a RELEASE
+// init copies from its own checkout, so a dirty checkout of the spec repo ships
+// work in progress into every adopter that runs it. It happened twice; the
+// second time the adopter noticed 135 uncommitted lines above the tag and
+// vendored from the tag by hand. A git-backed source now refuses when the
+// files it copies differ from HEAD, and says whether HEAD is the tag that
+// version.json declares. A plugin copy (no .git) is a release by construction.
+{
+  const srcVersion = (() => { try { return JSON.parse(readFileSync(join(SRC, 'version.json'), 'utf8')).version || '?'; } catch { return '?'; } })(); // readJSON is declared further down
+  const srcGit = (c) => { try { return execSync(c, { cwd: SRC, encoding: 'utf8', stdio: 'pipe' }).trim(); } catch { return null; } };
+  if (srcGit('git rev-parse --is-inside-work-tree') === 'true') {
+    const dirty = srcGit('git status --porcelain -- activation scripts hooks version.json .claude-plugin') || '';
+    const head = srcGit('git rev-parse HEAD');
+    const tagged = srcGit(`git rev-parse -q --verify v${srcVersion}^{commit}`);
+    if (dirty && !flag('--allow-dirty')) {
+      say(`  ✗ REFUSED before writing anything: the Project-OS checkout at ${SRC} has uncommitted changes in what init copies:`);
+      for (const l of dirty.split('\n')) say('      ' + l);
+      say(`  init copies from its checkout, so a dirty one would ship work in progress into this repo. Commit or stash it there, vendor from the tag (git show v${srcVersion}:<path>), or pass --allow-dirty if that is what you mean.`);
+      process.exit(EXIT.PREFLIGHT);
+    }
+    const where = tagged && tagged === head ? `clean checkout at tag v${srcVersion}` : tagged ? `HEAD is NOT tag v${srcVersion} — copying unreleased code` : `no tag v${srcVersion} in this checkout`;
+    say(`  source: Project-OS ${srcVersion} (${where}${dirty ? '; dirty, --allow-dirty given' : ''})`);
+  } else {
+    say(`  source: Project-OS ${srcVersion} (plugin copy, no git: a release by construction)`);
+  }
+}
+
 // ---------------------------------------------------------------- pre-flight
 let root;
 try { root = execSync('git rev-parse --show-toplevel', { cwd: TARGET, encoding: 'utf8', stdio: 'pipe' }).trim(); }

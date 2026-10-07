@@ -1,5 +1,18 @@
 # Journal — Project-OS
 
+## 2026-10-07 (late night) · Project OS Team lead (Claude)
+
+### Done
+- **0.7.9: `init` refuses a dirty source.** The adopter lead, about to re-vendor, saw 135 uncommitted lines above the tag in my checkout and stopped: "init copies from the tree, not the tag; I would take work in progress; it happened with 0.6.5". The lines were 0.7.8 and had been pushed minutes before their message, but the rule they applied is the right one and the installer did not enforce it. Now it does: a git-backed source with uncommitted changes in what `init` copies is refused before anything is written, the dirty files are named, and every run prints its source version and whether HEAD is the declared tag. A plugin copy without `.git` is a release by construction.
+- One test, which fails on 0.7.8; the test suite itself passes `--allow-dirty` to the checkout's `init`, because a suite runs on a tree under development by definition — the guard's own case uses a git-backed copy of the source.
+- Fifth release today. All five from adopters' reports or from reading my own code while fixing theirs.
+
+### Caught in the pass
+- The guard first referenced a helper declared further down the file (temporal dead zone) and crashed every `init` with a `ReferenceError`. Eight init cases went red at once, which is what a test suite is for.
+
+### Decisiones pendientes de Leo
+- Sin cambios respecto de las entradas anteriores de hoy.
+
 ## 2026-10-07 (night) · Project OS Team lead (Claude)
 
 ### Done

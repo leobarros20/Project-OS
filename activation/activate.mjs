@@ -28,7 +28,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { join, dirname } from 'node:path';
 import { writeHeartbeat, heartbeatState, allHeartbeats, pruneHeartbeats, clearHint, markerPath, STRANDED_MS, DEDUP_MS } from './heartbeat.mjs';
 
-const VERSION = '0.7.8';
+const VERSION = '0.7.9';
 const VENDOR = (process.argv[2] || 'unknown').toLowerCase();
 const CAP = 9000;           // Claude clips at 10,000 chars; Codex ~2,500 tokens. Stay under.
 const GRACE_MS = 60 * 60e3; // a commit up to 1h after the last heartbeat is the same session.
@@ -82,7 +82,7 @@ if (!existsSync(cfgPath)) {
 // One payload per session: the second activation exits quietly.
 //
 // The marker is a CLAIM that a run for this session is in flight or finished,
-// never a permanent lock. Through 0.7.8 it was permanent: a run killed mid-way
+// never a permanent lock. Through 0.7.9 it was permanent: a run killed mid-way
 // (its vendor's timeout, a harness stopping a background command, a session
 // cut) left the marker and a `started` heartbeat behind, every later fire for
 // that session exited here in silence, so nothing could ever write the `done`

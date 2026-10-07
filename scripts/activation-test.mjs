@@ -283,7 +283,9 @@ t('a legacy single heartbeat.json is still read', () => {
 // ---------------------------------------------------------------------------
 
 const INIT = join(ROOT, 'scripts/init.mjs');
-const initIn = (cwd, args = []) => spawnSync(process.execPath, [INIT, ...args], { cwd, encoding: 'utf8', input: '' });
+// the suite runs on a checkout under development, so the dirty-source guard (0.7.9) is
+// waived here; the guard has its own case with a git-backed copy of the source
+const initIn = (cwd, args = []) => spawnSync(process.execPath, [INIT, '--allow-dirty', ...args], { cwd, encoding: 'utf8', input: '' });
 const scratchRepo = () => {
   const d = mkdtempSync(join(tmpdir(), 'po-init-'));
   execSync(`${GIT} init -q`, { cwd: d, stdio: 'pipe' });
@@ -545,6 +547,30 @@ t('a clone that has never finished an activation says so, and says what to run',
     if (w.status !== 1 || !/has ever finished/.test(w.stdout)) return `expected the never-finished red, got exit ${w.status}: ${w.stdout.trim().slice(0, 160)}`;
     return /activate\.mjs/.test(w.stdout) || `red without the command that fixes it: ${w.stdout.trim().slice(0, 200)}`;
   } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+// 0.7.9: init copies from its own checkout, so a dirty checkout of the spec repo
+// ships work in progress into every adopter. An adopter caught 135 uncommitted
+// lines above the tag and vendored by hand; it was the second time.
+t('init refuses a dirty source checkout before writing anything, and proceeds with --allow-dirty', () => {
+  const src = mkdtempSync(join(tmpdir(), 'po-src3-'));
+  const repo = scratchRepo();
+  try {
+    cpSync(ROOT, src, { recursive: true, filter: (s) => !/[\\/]\.git[\\/]|[\\/]\.git$|node_modules/.test(s) });
+    execSync(`${GIT} init -q && ${GIT} add -A && ${GIT} commit -q -m release`, { cwd: src, stdio: 'pipe' });
+    const run = (args) => spawnSync(process.execPath, [join(src, 'scripts/init.mjs'), ...args], { cwd: repo, encoding: 'utf8', input: '' });
+    const clean = run(['--dry-run']);
+    if (clean.status !== 0) return `a clean source was refused (exit ${clean.status}): ${clean.stdout.trim().slice(-200)}`;
+    if (!/source: Project-OS \d/.test(clean.stdout)) return 'init does not say which version it copies from';
+    const act = join(src, 'activation/activate.mjs');
+    writeFileSync(act, readFileSync(act, 'utf8') + '\n// work in progress, not released\n');
+    const dirty = run([]);
+    if (dirty.status !== 2) return `a dirty source was not refused with exit 2 (got ${dirty.status}): ${dirty.stdout.trim().slice(-200)}`;
+    if (!/uncommitted changes/.test(dirty.stdout) || !/activation\/activate\.mjs/.test(dirty.stdout)) return `refused, but without naming the dirty file: ${dirty.stdout.trim().slice(-200)}`;
+    if (existsSync(join(repo, '.project-os/activate.mjs'))) return 'refused, but had already written the runtime into the adopter';
+    const allowed = run(['--allow-dirty', '--allow-refusals']);
+    return allowed.status === 0 || `--allow-dirty did not proceed (exit ${allowed.status}): ${allowed.stdout.trim().slice(-200)}`;
+  } finally { rmSync(src, { recursive: true, force: true }); rmSync(repo, { recursive: true, force: true }); }
 });
 
 // 7. Red freshness

@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.8
+**Current version:** 0.7.9
 
 This file does two jobs:
 
@@ -21,6 +21,22 @@ This file does two jobs:
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
 
 ---
+
+## 0.7.9 — 2026-10-07
+
+### What changed
+
+**`init` refuses a dirty source checkout.** `init` copies the runtime from its own checkout. A checkout of the spec repo with uncommitted changes therefore shipped work in progress into every adopter that ran it — twice: once unnoticed (0.6.5), once caught by an adopter who found 135 uncommitted lines above the tag and vendored by hand with `git show <tag>:<path>`. Now, when the source is a git checkout, `init` refuses **before writing anything** (exit `2`, pre-flight) if anything it copies — `activation/`, `scripts/`, `hooks/`, `version.json`, `.claude-plugin/` — differs from HEAD, names the dirty files, and offers the three ways out: commit or stash there, vendor from the tag, or `--allow-dirty` when it is deliberate. Every run prints its source: the version from `version.json` and whether HEAD **is** the tag that version declares, is past it (*copying unreleased code*), or has no such tag. A plugin copy with no `.git` is a release by construction and says so. Tested with a git-backed copy of the source: a clean one proceeds, a dirty one is refused with the file named and nothing written, `--allow-dirty` proceeds.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.9 versions (version line only; no text changed).
+2. Nothing to re-vendor: this changes `init` itself, not what it installs. The next `init` from a checkout prints its source line; read it.
+3. If `init` now refuses with exit `2`, the checkout it runs from has uncommitted changes. Do not pass `--allow-dirty` to make it go: vendor from the tag, or ask the spec repo's lead to commit.
+4. `JOURNAL.md` entry for the upgrade.
+
+---
+
 
 ## 0.7.8 — 2026-10-07
 
