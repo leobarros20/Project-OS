@@ -28,6 +28,8 @@ This file does two jobs:
 
 **`init` refuses a dirty source checkout.** `init` copies the runtime from its own checkout. A checkout of the spec repo with uncommitted changes therefore shipped work in progress into every adopter that ran it — twice: once unnoticed (0.6.5), once caught by an adopter who found 135 uncommitted lines above the tag and vendored by hand with `git show <tag>:<path>`. Now, when the source is a git checkout, `init` refuses **before writing anything** (exit `2`, pre-flight) if anything it copies — `activation/`, `scripts/`, `hooks/`, `version.json`, `.claude-plugin/` — differs from HEAD, names the dirty files, and offers the three ways out: commit or stash there, vendor from the tag, or `--allow-dirty` when it is deliberate. Every run prints its source: the version from `version.json` and whether HEAD **is** the tag that version declares, is past it (*copying unreleased code*), or has no such tag. A plugin copy with no `.git` is a release by construction and says so. Tested with a git-backed copy of the source: a clean one proceeds, a dirty one is refused with the file named and nothing written, `--allow-dirty` proceeds.
 
+*Fixed after tagging (one commit past v0.7.9):* the tag lookup used `^{commit}`, which cmd.exe eats, so on Windows the source line said "no tag" for a checkout that was exactly at the tag. The refusal was never affected; only the informational line.
+
 ### Migration (agent instructions — idempotent)
 
 1. Overwrite the three spec files with the 0.7.9 versions (version line only; no text changed).

@@ -85,7 +85,7 @@ const finish = ({ observed }) => {
   if (srcGit('git rev-parse --is-inside-work-tree') === 'true') {
     const dirty = srcGit('git status --porcelain -- activation scripts hooks version.json .claude-plugin') || '';
     const head = srcGit('git rev-parse HEAD');
-    const tagged = srcGit(`git rev-parse -q --verify v${srcVersion}^{commit}`);
+    const tagged = srcGit(`git rev-list -n 1 v${srcVersion}`); // no caret: cmd.exe eats ^{commit}
     if (dirty && !flag('--allow-dirty')) {
       say(`  ✗ REFUSED before writing anything: the Project-OS checkout at ${SRC} has uncommitted changes in what init copies:`);
       for (const l of dirty.split('\n')) say('      ' + l);
