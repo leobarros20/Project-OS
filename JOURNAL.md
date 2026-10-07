@@ -1,5 +1,19 @@
 # Journal — Project-OS
 
+## 2026-10-08 · Project OS Team lead (Claude)
+
+### Done
+- **0.7.10: the ledger merges by union.** The adopter lead reported it as process, not code: the committed append-only ledger is written by every push, so every open PR conflicts with the default branch on it whenever another PR lands — five rebases in a day, one rejected merge, always the same mechanical resolution. They offered two remedies and left the choice to me. Took (a), `merge=union` in `.gitattributes`, written by `init`; declined (b), one file per row with a generated aggregate, because that is a file per push in the repo and a generator to keep alive, for a problem git already solves. The adopter applied the line the same hour, on my word, before the release: the right order for a one-line, reversible change.
+- The part the report did not ask for: union leaves rows in arbitrary order, and the watchdog and the doctor both read the last line as the latest run. Both now take the newest timestamp. Without that, the fix would have planted a false "7 days without a row".
+- This repo's own `.gitattributes` carries the line too.
+
+### Caught in the pass
+- The union test's control ran a shell idiom (`2>/dev/null`) that cmd.exe does not have, so both checkouts failed and the case threw before proving anything. Resolved the base branch with `git rev-parse` instead of guessing its name. Second Windows-only habit this week, after the `^` in 0.7.9's tag lookup; the suite runs on Windows and the adopters do too, so these count.
+- My patch tool counted a regex match as two (a `match` without `/g` returns the group too) and refused a one-occurrence edit. Tool bug, not a spec bug; applied by hand.
+
+### Decisiones pendientes de Leo
+- Sin cambios.
+
 ## 2026-10-07 (late night) · Project OS Team lead (Claude)
 
 ### Done

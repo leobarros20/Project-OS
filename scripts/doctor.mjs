@@ -184,7 +184,9 @@ check('watchdog', 'Is the out-of-band watchdog alive?', () => {
   if (!existsSync(ledger)) return { state: 'WARN', detail: 'watchdog present but has never run (no activation ledger). Install the pre-push hook and a scheduled run (activation/templates/schedule.md).' };
   const rows = readFileSync(ledger, 'utf8').split('\n').filter((l) => /^\| \d{4}-/.test(l));
   if (!rows.length) return { state: 'WARN', detail: 'ledger exists but holds no rows yet' };
-  const last = rows[rows.length - 1].split('|').map((s) => s.trim());
+  // newest by timestamp, never the last line: the ledger is merge=union, and a union merge leaves rows in arbitrary order
+  const parsed = rows.map((l) => l.split('|').map((s) => s.trim()));
+  const last = parsed.reduce((m, r) => ((Date.parse(r[1]) || 0) > (Date.parse(m[1]) || 0) ? r : m), parsed[0]);
   const lastAt = Date.parse(last[1]);
   const headTime = Date.parse(quiet('git log -1 --format=%cI HEAD').out || 0);
   if (headTime > lastAt + 7 * 86400e3) return { state: 'FAIL', detail: `commits landed more than 7 days after the last ledger row (${last[1].slice(0, 10)}, ${last[2]}) — the watchdog was not running; the dead-man's switch is dead` };

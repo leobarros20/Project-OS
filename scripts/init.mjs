@@ -255,6 +255,18 @@ const giLines = ['.project-os/heartbeat.json', '.project-os/heartbeat/', '.proje
 if (giLines.length) { did(`add ${giLines.length} line(s) to .gitignore`); if (!DRY) appendFileSync(gi, (giCur && !giCur.endsWith('\n') ? '\n' : '') + '# Project-OS: machine-local state\n' + giLines.join('\n') + '\n'); }
 else say('  = .gitignore current');
 
+// ---------------------------------------------------------- 5b. gitattributes
+// The activation ledger is append-only and every branch's push appends a row,
+// so two open branches ALWAYS conflict on it unless git is told to take both
+// sides. `merge=union` does that for local merges and for the rebase before a
+// PR that Part 7 requires; a hosted web merge does not honour it, which is one
+// more reason the rebase comes first. An adopter counted five rebases in one
+// day whose only conflict was this file, and one merge rejected for it.
+const ga = join(root, '.gitattributes'); const gaCur = existsSync(ga) ? readFileSync(ga, 'utf8') : '';
+const gaLine = '.project-os/activation-ledger.md merge=union';
+if (gaCur.split('\n').map((l) => l.trim()).includes(gaLine)) say('  = .gitattributes current');
+else { did('declare merge=union for the activation ledger in .gitattributes'); if (!DRY) appendFileSync(ga, (gaCur && !gaCur.endsWith('\n') ? '\n' : '') + '# Project-OS: the activation ledger is append-only; take both sides on merge\n' + gaLine + '\n'); }
+
 // ------------------------------------------------------------ 6. pre-push
 const prePushSrc = readFileSync(join(SRC, 'activation/templates/pre-push'), 'utf8');
 if (hooksPath) refuse(`core.hooksPath is set to "${hooksPath}" and I did not set it — add the pre-push watchdog there yourself (activation/templates/pre-push)`);

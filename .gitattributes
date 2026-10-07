@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# Project-OS: the activation ledger is append-only; take both sides on merge
+.project-os/activation-ledger.md merge=union

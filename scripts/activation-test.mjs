@@ -573,6 +573,70 @@ t('init refuses a dirty source checkout before writing anything, and proceeds wi
   } finally { rmSync(src, { recursive: true, force: true }); rmSync(repo, { recursive: true, force: true }); }
 });
 
+// ---------------------------------------------------------------------------
+// 0.7.10: the ledger is append-only and every branch appends, so without a
+// union merge every open PR conflicted with main on it (five rebases in one
+// adopter in one day, one merge rejected). And union leaves rows in arbitrary
+// order, so "the last line" is not "the newest row".
+// ---------------------------------------------------------------------------
+
+const ledgerRow = (when, head, state) => `| ${when} | test | ${head} | ${state} | ok |\n`;
+const twoBranchesAppend = (withAttribute) => {
+  const d = scratchRepo();
+  try {
+    mkdirSync(join(d, '.project-os'), { recursive: true });
+    writeFileSync(join(d, '.project-os/activation-ledger.md'), '# Activation ledger\n\n| When (UTC) | Source | HEAD | State | Detail |\n|---|---|---|---|---|\n' + ledgerRow('2026-10-01T00:00:00.000Z', 'aaaaaaa', 'GREEN'));
+    if (withAttribute) writeFileSync(join(d, '.gitattributes'), '.project-os/activation-ledger.md merge=union\n');
+    execSync(`${GIT} add -A && ${GIT} commit -q -m base`, { cwd: d, stdio: 'pipe' });
+    const base = execSync('git rev-parse --abbrev-ref HEAD', { cwd: d, encoding: 'utf8' }).trim();
+    const append = (branch, row) => {
+      execSync(`${GIT} checkout -q -b ${branch} ${base}`, { cwd: d, stdio: 'pipe' });
+      writeFileSync(join(d, '.project-os/activation-ledger.md'), readFileSync(join(d, '.project-os/activation-ledger.md'), 'utf8') + row);
+      execSync(`${GIT} commit -q -am "${branch} row"`, { cwd: d, stdio: 'pipe' });
+    };
+    append('a', ledgerRow('2026-10-02T00:00:00.000Z', 'bbbbbbb', 'GREEN'));
+    append('b', ledgerRow('2026-10-03T00:00:00.000Z', 'ccccccc', 'GREEN'));
+    const r = spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'merge', '-q', 'a'], { cwd: d, encoding: 'utf8' });
+    const text = readFileSync(join(d, '.project-os/activation-ledger.md'), 'utf8');
+    return { merged: r.status === 0, conflictMarkers: /^<<<<<<<|^>>>>>>>/m.test(text), rows: (text.match(/^\| \d{4}-/gm) || []).length };
+  } finally { rmSync(d, { recursive: true, force: true }); }
+};
+
+t('two branches appending ledger rows merge cleanly with merge=union (control: they conflict without it)', () => {
+  const without = twoBranchesAppend(false);
+  if (without.merged) return 'control failed: without the attribute the merge did not conflict, so this case proves nothing';
+  const w = twoBranchesAppend(true);
+  if (!w.merged || w.conflictMarkers) return `with merge=union the merge still conflicted (merged=${w.merged}, markers=${w.conflictMarkers})`;
+  return w.rows === 3 || `union merge lost a row: ${w.rows} of 3`;
+});
+
+t('init writes the ledger merge attribute, keeps foreign .gitattributes lines, and is idempotent', () => {
+  const d = scratchRepo();
+  try {
+    writeFileSync(join(d, '.gitattributes'), '*.png binary\n');
+    initIn(d, ['--allow-refusals']);
+    const a = readFileSync(join(d, '.gitattributes'), 'utf8');
+    if (!/^\.project-os\/activation-ledger\.md merge=union$/m.test(a)) return `attribute not written: ${JSON.stringify(a)}`;
+    if (!/^\*\.png binary$/m.test(a)) return 'a foreign .gitattributes line was lost';
+    const again = initIn(d, ['--allow-refusals']);
+    const b = readFileSync(join(d, '.gitattributes'), 'utf8');
+    return (b === a && /\.gitattributes current/.test(again.stdout)) || 'a second run rewrote or duplicated the attribute';
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+t('the watchdog takes the NEWEST ledger row by timestamp, not the last line', () => {
+  const d = clone();
+  try {
+    shim(d, 'claude'); shim(d, 'claude');
+    const head = execSync('git rev-parse --short HEAD', { cwd: d, encoding: 'utf8' }).trim();
+    const now = new Date().toISOString();
+    // newest row first, an ancient row LAST: the order a union merge can leave behind
+    writeFileSync(join(d, '.project-os/activation-ledger.md'), '# Activation ledger\n\n| When (UTC) | Source | HEAD | State | Detail |\n|---|---|---|---|---|\n' + ledgerRow(now, head, 'GREEN') + ledgerRow('2020-01-01T00:00:00.000Z', '0000000', 'GREEN'));
+    const w = spawnSync(process.execPath, [join(d, 'activation/watchdog.mjs'), '--source', 'test'], { cwd: d, encoding: 'utf8', input: '' });
+    return !/days after the last ledger row/.test(w.stdout) || `the watchdog read the last line as the newest row: ${w.stdout.trim().slice(0, 200)}`;
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
 // 7. Red freshness
 // 7. Red freshness
 // 7. Red freshness -> DOCS_STALE, and the owed list is in the payload.

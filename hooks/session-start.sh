@@ -1,3 +1,3 @@
 #!/bin/sh
-# project-os v0.7.9 — plugin SessionStart entry; delegates to the vendor-agnostic shim.
+# project-os v0.7.10 — plugin SessionStart entry; delegates to the vendor-agnostic shim.
 exec sh "$(dirname "$0")/../activation/shim.sh" claude

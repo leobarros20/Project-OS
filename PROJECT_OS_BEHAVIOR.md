@@ -1,6 +1,6 @@
 # PROJECT_OS_BEHAVIOR.md
 
-**Status:** Working draft · 0.7.9
+**Status:** Working draft · 0.7.10
 **Purpose:** How an AI agent should act on a project under this OS. Session protocol, intent capture, autonomous cadence, drift handling, bootstrapping, and team orchestration. This file is the runtime contract that complements the artifact contract in `PROJECT_OS.md` and the rendering spec in `PROJECT_OS_VIEWS.md`.
 
 **Audience:** AI coding agents (Claude Code, Cursor, Codex, etc.).
@@ -401,7 +401,7 @@ Recommended from bootstrap, for every project with a remote that can hold pull r
 4. **Rebase on `main` before opening or updating the PR.** A PR that drifts dozens of commits behind is a zombie: it cannot be reviewed against reality and its conflicts compound (reference case: four stale PRs, 9 to 47 commits behind). Rebase is the worker's job, every time.
 5. **The handoff is the pull request**, with the standard body — **What changed** (files + symbols + why) · **Verification done** (exact commands + results) · **UI touched?** (what trail was left) · **QA ticket** (required for features) · **Needs lead action** (deploy / secret / console, or none). The PR *is* the queue entry; a tracker issue is optional cross-reference, not the mechanism.
 6. **Conflicts are resolved in the PR, by the merger.** A worker that hits a conflict with `main` rebases and resolves on its own branch; a conflict *between* two PRs is the merger's call, made once, in the PR, and recorded there.
-7. **The merger verifies locally in a clean worktree before merging** — hosted CI is never a dependency (see the watchdog). A worker's "done" is a **claim to re-verify**, not a guarantee, and the integrated whole is what gets verified (7.6).
+7. **The merger verifies locally in a clean worktree before merging** — hosted CI is never a dependency (see the watchdog). A worker's "done" is a **claim to re-verify**, not a guarantee, and the integrated whole is what gets verified (7.6). The activation ledger (`.project-os/activation-ledger.md`) is append-only and every branch's push appends a row, so it is declared `merge=union` in `.gitattributes` (`init` writes it): concurrent branches never conflict on it. A union merge leaves rows in arbitrary order, so the newest row is the one with the newest timestamp, never the last line — the watchdog and the doctor read it that way, and so should a person.
 8. **The merger bounces** a substantive PR that lacks its docs artifacts — journal-worthy work with no artifact updates, a feature with no QA ticket. Returning incomplete work is the system working.
 
 **Territory still exists.** Branches do not stop two teams from editing the same file; *ownership* does. Every worker's brief names the files and areas it owns (7.7); shared declarations live in one module (7.6); contested shared docs are noted in the PR instead of raced on.

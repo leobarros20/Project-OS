@@ -108,7 +108,7 @@ It copies the runtime into `.project-os/`, writes `config.json` defaults (never
 overwrites one), merges the SessionStart entry into each vendor config it finds
 (`--vendors claude,codex,gemini` to force; foreign hooks are kept), writes the
 static block into `AGENTS.md` and any `CLAUDE.md`/`GEMINI.md`, creates the workbench with its index README and six kind folders (names per `notesFolders`), adds the
-gitignore lines, installs the pre-push watchdog, then fires activation from the
+gitignore lines, declares `merge=union` for the activation ledger in `.gitattributes`, installs the pre-push watchdog, then fires activation from the
 root and from a subdirectory. **It refuses what it cannot own** (a foreign
 pre-push, a `core.hooksPath` it did not set, a vendor file that is not JSON)
 rather than producing a dead install. Re-running is safe. **Exit codes:** `0` complete and observed (the only 0) · `3` everything that could be applied was, and seen firing, but items were REFUSED and need a human · `1` activation did not fire · `2` pre-flight. The last line is always `RESULT applied=N refused=M observed=yes|no`; `--allow-refusals` maps 3 to 0 for a wrapper that handles the printed list itself. Works in a git worktree. **It refuses a dirty source checkout** (uncommitted changes in what it copies would ship work in progress into the adopter; exit `2` before writing anything; `--allow-dirty` to override) and prints whether its source is the tag that `version.json` declares.

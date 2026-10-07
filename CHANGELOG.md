@@ -1,7 +1,7 @@
 # Project-OS — Changelog & migration guide
 
 **Canonical repo:** https://github.com/leobarros20/Project-OS
-**Current version:** 0.7.9
+**Current version:** 0.7.10
 
 This file does two jobs:
 
@@ -21,6 +21,27 @@ This file does two jobs:
 **Dry run first:** before applying, list what each step *would* create or change and show the user. Apply only what's missing.
 
 ---
+
+## 0.7.10 — 2026-10-08
+
+### What changed
+
+**The activation ledger merges by union.** `.project-os/activation-ledger.md` is append-only and every branch's push appends a row to it, so with the one-branch-per-worker model of Part 7 every open PR conflicted with the default branch on that file each time another PR landed. An adopter counted five rebases in one day whose only conflict was the ledger, and one merge rejected for it; the resolution was always "both sets of rows", which is mechanical. Now `init` declares `.project-os/activation-ledger.md merge=union` in `.gitattributes` (foreign lines kept, idempotent), and git takes both sides in local merges and in the rebase before a PR that Part 7 already requires. A hosted web merge does not honour merge attributes, which is one more reason the rebase comes first. Tested: two branches each appending a row merge cleanly with the attribute and conflict without it (the control), and no row is lost.
+
+**The newest ledger row is the newest timestamp, never the last line.** A union merge leaves rows in arbitrary order, and both the watchdog and the doctor read "the last line" as "the latest run" — which, after a union merge, could be an old row and a false "commits landed more than 7 days after the last ledger row". Both now take the newest timestamp. Tested with a ledger whose last line is from 2020 and whose first row is now. `PROJECT_OS_BEHAVIOR.md` 7.2 says so in one sentence, for people as much as for code.
+
+### Migration (agent instructions — idempotent)
+
+1. Overwrite the three spec files with the 0.7.10 versions.
+2. **Re-vendor every adopting repo with `project-os init`** (the `.gitattributes` line, plus the watchdog that reads by timestamp). Or add the line by hand now:
+   ```
+   .project-os/activation-ledger.md merge=union
+   ```
+3. Open PRs that conflict on the ledger today: rebase once after the attribute is on the default branch; git resolves it.
+4. `JOURNAL.md` entry for the upgrade.
+
+---
+
 
 ## 0.7.9 — 2026-10-07
 

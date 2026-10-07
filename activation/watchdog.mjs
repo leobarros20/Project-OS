@@ -79,8 +79,9 @@ if (!hb && !running.length && !stranded.length) red.push('trail: no activation h
 const ledgerPath = join(root, '.project-os/activation-ledger.md');
 if (existsSync(ledgerPath)) {
   const rows = readFileSync(ledgerPath, 'utf8').split('\n').filter((l) => /^\| \d{4}-/.test(l));
-  const last = rows[rows.length - 1];
-  const lastAt = last ? Date.parse(last.split('|')[1].trim()) : 0;
+  // Newest by timestamp, never the last line: the ledger is merge=union, and a
+  // union merge leaves rows in arbitrary order.
+  const lastAt = rows.reduce((m, l) => Math.max(m, Date.parse(l.split('|')[1].trim()) || 0), 0);
   if (lastAt && headTime > lastAt + GRACE_DAYS * 86400e3) red.push(`trail: commits landed more than ${GRACE_DAYS} days after the last ledger row (${new Date(lastAt).toISOString().slice(0, 10)}) — the watchdog itself was not running`);
 }
 
